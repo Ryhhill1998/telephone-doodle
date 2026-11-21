@@ -20,6 +20,7 @@ A web app for playing "telephone pictionary" with family. Each player starts a "
 10. **Prefer boring and simple.** No extra frameworks, queues, caches, ORMs or auth systems. If something in this plan seems wrong or over-complicated, say so rather than silently deviating.
 11. **One command per check.** Every lint, test, build and check is a `make` target (see Step 1), and CI calls those same targets. Never duplicate a command's flags between the Makefile and a workflow file.
 12. **Tests ship with the code they cover**, on both sides: backend with `pytest`, frontend with `vitest` and Testing Library, and a Playwright end-to-end suite (Step 12). A frontend PR without tests is incomplete.
+13. **Log every deviation in this file.** If a step is built differently from how this plan describes it, or a sub-step is deferred, reordered or dropped, append an entry to [section 9, Build log](#9-build-log-decisions-and-deviations) in the same PR as the change: what the plan said, what was actually done, and why. Record the decisions this plan asks me to make there too. Mentioning a deviation only in chat or in a PR description is not enough — this file has to stay true.
 
 ---
 
@@ -522,3 +523,80 @@ Branch `docs/wrapup`.
 - [ ] Finished games are saved with player names, words and pages
 - [ ] Infrastructure managed by Terraform (except the state bucket, the Neon project and the secret value), with a documented teardown
 - [ ] README explains how to run, deploy and recover
+
+---
+
+## 9. Build log: decisions and deviations
+
+Append-only. Newest step last. See working agreement rule 13.
+
+### Step 0 — preflight and repo creation (21 Nov 2026)
+
+**Decisions (the answers to 0c):**
+
+| Question | Answer |
+|---|---|
+| Repo name | `telephone-doodle` |
+| Visibility | **Public** |
+| GCP project id | **`telephone-doodle-9e7a70a4`** (recorded only; nothing created) |
+
+**Tooling found (0a).** git 2.43.0, gh 2.100.0 (authed as `Ryhhill1998`, SSH),
+uv 0.13.6, node 26.13.1 (confirmed Latest LTS, "Lithium"), npm 11.20.0,
+docker 29.8.0 with Compose v5.2.0, terraform 1.14.7. System python is 3.14.4, but
+that is irrelevant: `uv` pins the project's own interpreter and `cpython-3.15.2`
+is available, confirming the plan's claim that **Python 3.15 is the current
+stable release**.
+
+**Deviations:**
+
+1. **Repo created with `--source=.`, not `--clone`.** 0c says
+   `gh repo create <name> --<visibility> --clone`. `BUILD_PLAN.md` already lived in
+   `~/Documents/personal/telephone-doodle`, so cloning would have nested a second
+   working copy inside it. Used
+   `gh repo create telephone-doodle --public --source=. --remote=origin --push`
+   instead. Identical end state.
+2. **Branch protection is lighter than "require PR before merging" implies.**
+   Set `required_approving_review_count: 0` and `enforce_admins: false`.
+   GitHub forbids approving your own pull request, so requiring even one approval
+   would lock the sole owner out of his own repo. Force-pushes, branch deletion and
+   unresolved conversations are blocked. **No required status check yet** —
+   `ci-ok` does not exist until Step 1, and naming a non-existent check blocks every
+   PR; it is added as the single required check in the Step 1 PR.
+3. **Commit identity is the GitHub handle, not the global git identity.** The
+   initial commit was authored with a work email address, which would have been
+   permanently visible in a public repo's history. It was amended and force-pushed
+   (Ryan removed branch protection for the push and it was immediately re-applied),
+   so the work address never remained in the published history. Personal projects now
+   resolve to `Ryhhill1998 <95857127+Ryhhill1998@users.noreply.github.com>`
+   automatically, via `[includeIf "gitdir:~/Documents/personal/"]` in `~/.gitconfig`
+   pointing at `~/.gitconfig-personal`; repos under `~/Documents/repos/` keep the
+   work identity. **No personal/public repo should ever be committed to with the work
+   address.**
+4. **0b (free-tier re-verification) deferred to the start of Step 14.** Nothing is
+   created in Step 0, and working agreement rule 8 forbids touching cloud providers
+   before Step 14. The Cloud Run, Neon, Artifact Registry and Firebase Hosting figures
+   in 0b will be re-checked against the live pricing pages before a line of Terraform
+   is written, and reported then.
+5. **Terraform upgrade deferred to the start of Step 14.** Installed 1.14.7, latest
+   stable 1.17.2. `tenv` manages it, so the bump is user-local and takes one command.
+   No Terraform is written before Step 14, so upgrading earlier gains nothing.
+
+**Open proposals — flagged to Ryan, agreed in principle, not yet applied.**
+Each is applied (and logged again) in the step it belongs to:
+
+- **Step 15 will fail its first `terraform apply` as written.** `cloud_run.tf`
+  (Step 14) wires `DATABASE_URL` from a Secret Manager secret, but 15.2 applies
+  Terraform *before* the secret value is added by hand in 15.4. A Cloud Run v2
+  revision referencing a secret with no versions cannot deploy. Fix at Step 14/15:
+  a **two-pass bootstrap** — apply everything except the Cloud Run service, add the
+  secret version by hand, then apply again.
+- **The ~600-line PR rule (agreement rule 3) does not fit several steps.** Step 2
+  alone is a ~200-word `words.json` plus a large test matrix; Steps 4, 8 and 10 are
+  comparable. Generated and data files are counted separately from reviewable code,
+  and steps are split at clean seams with a note in the PR when that happens.
+- **Step 14: `ALLOWED_ORIGINS` needs both Firebase domains**,
+  `https://<project>.web.app` *and* `https://<project>.firebaseapp.com`, or the UI
+  breaks on whichever is omitted.
+- **Step 6: raise the per-IP concurrent WebSocket cap from 20 to 40.** A family of
+  up to 10 players behind one home NAT shares a single public IP, and reconnect
+  storms leave half-closed sockets lingering, so 20 is uncomfortably tight.
