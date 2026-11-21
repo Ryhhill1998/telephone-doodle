@@ -34,11 +34,16 @@ __all__ = [
     "book_for",
     "deal_words",
     "enter_reveal",
+    "finish_reveal",
     "has_submitted",
+    "is_last_step",
     "kick",
     "new_game",
     "pick_word",
     "previous_page",
+    "reveal_next",
+    "reveal_prev",
+    "reveal_step_count",
     "shuffle_seats",
     "shuffle_words",
     "skip_player",
@@ -288,3 +293,69 @@ def enter_reveal(game: Game) -> None:
     """Open every book to everyone. The secrecy rule ends here."""
     game.phase = Phase.REVEAL
     game.reveal = Reveal(book=0, step=0)
+
+
+# -- the reveal ----------------------------------------------------------
+
+
+def reveal_step_count(game: Game, book: int) -> int:
+    """Steps in a book: the word card, then one per page."""
+    return 1 + len(game.books[book].pages)
+
+
+def is_last_step(game: Game) -> bool:
+    """Whether the pointer is on the final step of the final book."""
+    assert game.reveal is not None
+    last_book = len(game.books) - 1
+    return (
+        game.reveal.book == last_book and game.reveal.step == reveal_step_count(game, last_book) - 1
+    )
+
+
+def _require_host(game: Game, seat: int, action: str) -> None:
+    if seat != game.host_idx:
+        raise NotAllowed(f"only the host can {action}")
+
+
+def reveal_next(game: Game, seat: int) -> None:
+    """Move the shared pointer forward one step, for everyone.
+
+    Running off the end of a book lands on the word card of the next one.
+    Clamps at the very end rather than raising: the host is shown "Finish game"
+    there, so a stray Next is a double-tap, not a bug worth failing a game for.
+    """
+    _require_phase(game, Phase.REVEAL, "move the reveal")
+    _require_host(game, seat, "turn the pages")
+    assert game.reveal is not None
+
+    if is_last_step(game):
+        return
+    if game.reveal.step < reveal_step_count(game, game.reveal.book) - 1:
+        game.reveal.step += 1
+    else:
+        game.reveal.book += 1
+        game.reveal.step = 0
+
+
+def reveal_prev(game: Game, seat: int) -> None:
+    """Move the pointer back one step, over book boundaries. Clamps at the start."""
+    _require_phase(game, Phase.REVEAL, "move the reveal")
+    _require_host(game, seat, "turn the pages")
+    assert game.reveal is not None
+
+    if game.reveal.step > 0:
+        game.reveal.step -= 1
+    elif game.reveal.book > 0:
+        game.reveal.book -= 1
+        game.reveal.step = reveal_step_count(game, game.reveal.book) - 1
+
+
+def finish_reveal(game: Game, seat: int) -> None:
+    """End the game. Only legal on the last step of the last book."""
+    _require_phase(game, Phase.REVEAL, "finish the game")
+    _require_host(game, seat, "finish the game")
+
+    if not is_last_step(game):
+        raise NotAllowed("there are still pages to show")
+
+    game.phase = Phase.DONE
