@@ -1,0 +1,27 @@
+# Local Postgres for development and tests. Production uses Neon (BUILD_PLAN.md §2),
+# so nothing here is deployed; `make db` starts it and `make db-stop` stops it.
+services:
+  db:
+    image: postgres:19
+    container_name: telephone-doodle-db
+    environment:
+      # Development-only credentials. Never used outside localhost, and the real
+      # connection string lives in Secret Manager (BUILD_PLAN.md §5, Step 15).
+      POSTGRES_USER: doodle
+      POSTGRES_PASSWORD: doodle
+      POSTGRES_DB: doodle
+    ports:
+      - "5432:5432"
+    volumes:
+      # Postgres 18+ images store data in a major-version-specific subdirectory,
+      # so the volume mounts at /var/lib/postgresql, not .../data.
+      # See https://github.com/docker-library/postgres/pull/1259
+      - doodle-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doodle -d doodle"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  doodle-db-data:

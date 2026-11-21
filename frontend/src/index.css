@@ -1,0 +1,13 @@
+/* Minimal reset only. The design tokens from BUILD_PLAN.md §4 land in Step 8,
+   once the UI design has been approved. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
