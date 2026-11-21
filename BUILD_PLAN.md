@@ -699,3 +699,44 @@ Two corrections, neither of them new build work.
 `feat/word-bank` (`words.json` plus dealing, shuffling and the uniqueness tests)
 and `feat/game-engine` (models, rotation, transitions, `view_for`, serialisation).
 Data is reviewed separately from the logic that consumes it.
+
+### Step 2a — word bank (21 Nov 2026)
+
+First of Step 2's two PRs, per the new rule 3: the data and its dealing rules,
+reviewed apart from the engine that consumes them.
+
+**Deviations:**
+
+1. **`game_engine` does touch the filesystem, once.** The Step 2 checklist says
+   "zero I/O imports", but the plan also puts `words.json` inside
+   `game_engine/`, so something must read it. `load_words()` reads the bundled
+   file through `importlib.resources` and is the only such call in the package.
+   Purity is preserved where it matters: `WordBank` takes its vocabulary as an
+   argument, so every test builds one from a literal list and never touches
+   disk. The guard test allows `json` and `importlib.resources` by name and
+   bans everything else.
+2. **The dependency direction is enforced by a test, not by ruff.** Ruff's
+   banned-api rule is global and cannot be scoped to one directory without a
+   second config file. `tests/game_engine/test_dependency_direction.py` walks
+   each module's AST instead and fails with a sentence explaining the rule. It
+   also bans calls to the global `random` generator, which would quietly make
+   games unreplayable. All three rules were probed by introducing the violation
+   they catch, so they are known to fail and not merely to pass.
+3. **`WordBank.to_dict`/`from_dict` ship here rather than with the engine.**
+   The plan lists serialisation under the engine's `to_dict(game)`. The bank
+   owns state the engine cannot reconstruct — which options each player is
+   holding — and Step 5 needs that to survive a reload so a reconnecting player
+   is shown the same three words rather than a fresh deal that might collide
+   with someone else's. Keeping it with the bank makes the engine PR a
+   composition job.
+4. **210 words, not "~200".** Comfortably above the worst case (10 players x 3
+   options = 30 before any shuffling) with recycling on top.
+
+**Decided while building:** a *shuffle* is the same operation as a deal — the
+old options are released before new ones are drawn, which is what prevents a
+shuffle returning a word another player is looking at. Typed words are not
+retired, matching section 1's reasoning that comparing them with other players'
+words would leak what someone else chose.
+
+**Verified:** 44 tests pass; `game_engine` coverage 100% (the checklist asks for
+>= 90%); `make lint` and `make test` green.
