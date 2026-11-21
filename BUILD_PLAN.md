@@ -600,3 +600,78 @@ Each is applied (and logged again) in the step it belongs to:
 - **Step 6: raise the per-IP concurrent WebSocket cap from 20 to 40.** A family of
   up to 10 players behind one home NAT shares a single public IP, and reconnect
   storms leave half-closed sockets lingering, so 20 is uncomfortably tight.
+
+### Step 1 — project scaffolding and CI (21 Nov 2026)
+
+**Versions resolved** (nothing pinned from memory; package managers resolved these):
+
+| | |
+|---|---|
+| Python | **3.15.2** (`.python-version` pins `3.15`, uv fetches the interpreter) |
+| FastAPI 0.165.0 | uvicorn 0.54.0 (`[standard]`), starlette 1.10.0, pydantic 2.14.4 |
+| psycopg | 3.3.9 (`[binary,pool]`), psycopg-pool 3.3.3 |
+| Backend dev | pytest 9.2.0, pytest-asyncio 1.5.0, pytest-cov 7.1.0, ruff 0.17.6, httpx2 2.16.2 |
+| Node | **26.13.1** (Latest LTS "Lithium"), npm 11.20.0 |
+| Frontend | Vite 8.3.6, React 19.3.1, TypeScript 7.0.2, @vitejs/plugin-react 6.1.2 |
+| Frontend dev | vitest 5.1.1, @vitest/coverage-v8 5.1.1, jsdom 31.0.1, Testing Library (react 16.3.3, dom 10.4.2, jest-dom 8.0.0, user-event 14.6.13), oxlint 1.90.0 |
+| Postgres | **19.0** (`postgres:19`), local and in CI |
+| Actions | checkout v7.0.1, setup-node v7.1.0, setup-uv v10.4.0, paths-filter v4.0.3, setup-terraform v4.0.1 |
+
+**Deviations:**
+
+1. **oxlint, not ESLint.** Step 1 says ESLint. The current Vite `react-ts` template
+   ships **oxlint** instead, and no longer generates any ESLint config. Kept the
+   template's choice rather than tearing it out and hand-building an ESLint +
+   typescript-eslint + react-plugins stack: it is the upstream default, needs no
+   extra config, and agreement rule 10 prefers fewer moving parts. The script is
+   `oxlint --deny-warnings`, because oxlint reports violations as *warnings* and
+   would otherwise exit 0 and pass CI silently (verified both ways with a probe
+   file). **Say so and this gets swapped for ESLint.**
+2. **`httpx2`, not `httpx`.** Step 1 lists httpx. Starlette 1.10's `TestClient`
+   now emits `StarletteDeprecationWarning: Using httpx with starlette.testclient
+   is deprecated; install httpx2 instead`. Used httpx2 2.16.2.
+3. **Two dev dependencies added beyond the step's list:** `pytest-asyncio` (Step 3's
+   storage layer and Step 4's WebSocket tests are async) and `pytest-cov`
+   (Step 2's review checklist requires `game_engine` coverage >= 90%). Adding them
+   now avoids churning the lockfile in the next two steps.
+4. **TypeScript `strict` had to be set by hand.** The template's `tsconfig.app.json`
+   and `tsconfig.node.json` no longer include it, and the plan requires strict TS.
+   Set explicitly in both, and confirmed enforced with a throwaway file containing
+   an implicitly-typed parameter (`error TS7006`).
+5. **Postgres volume mounts at `/var/lib/postgresql`, not `.../data`.** Postgres 18+
+   Docker images store data in a major-version-specific subdirectory and refuse to
+   start against the old layout. The first `make db` failed on exactly this; the
+   compose file carries a comment and a link to the upstream change.
+6. **`pytest` runs with `-W error`.** Deprecation warnings from FastAPI, Starlette
+   or psycopg fail the backend suite while they are still cheap to fix, rather than
+   accumulating unnoticed. This is what surfaced deviation 2.
+7. **Path filters are wider than the step describes.** `Makefile` and
+   `.github/workflows/ci.yml` changes trigger **both** the backend and frontend jobs,
+   and `.nvmrc` triggers the frontend, because a change to any of them can break
+   those jobs. The `infra` filter is `infrastructure/**` only, for the reason below.
+8. **`infra-fmt`, `infra-validate` and `ci-infra` are not in the Makefile yet.** The
+   plan already defers them to Step 14. The `infra` CI job exists in `ci.yml` with
+   its path filter, but can only ever fire once `infrastructure/**` exists, which
+   first happens in the Step 14 PR that also adds the targets. **Step 14 must add
+   `Makefile` and `ci.yml` to the infra filter** to close the gap left by deviation 7.
+9. **Makefile has targets beyond the step's list:** `install`, `backend-install`,
+   `frontend-install` (so CI's dependency-installation step is a make target too, not
+   a duplicated command — agreement rule 11), plus `db-stop`, `backend-format` and
+   `help`.
+10. **`.nvmrc` added at the repo root**, so the Node version has one home and
+    `actions/setup-node` reads it via `node-version-file` instead of a hardcoded
+    version in the workflow.
+11. **No `backend/settings.py` yet**, and none of `api/`, `rooms/`, `storage/` or
+    `game_engine/` exist. Step 1 says to create package folders when they first have
+    content; there is no configuration to hold until Step 3.
+12. **The template's `frontend/.gitignore` was deleted** in favour of the root one,
+    with its two unique entries (`logs/`, `*.tsbuildinfo`) folded in, so there is a
+    single ignore file to reason about.
+
+**Verified locally:** `make lint` and `make test` both pass; `make frontend-build`
+produces a 219.66 kB bundle (68.65 kB gzipped); `make db` starts Postgres 19.0 and
+data survives `make db-stop` + `make db`; the Vite dev proxy forwards `/api/...` to
+the backend with the path intact (confirmed in uvicorn's own request log) and
+upgrades `/ws/...` through to it. The first proxy check was run against the wrong
+port — 5173 was already held by an unrelated container, so Vite had silently fallen
+back to 5174 — and was redone on a pinned free port with `--strictPort`.

@@ -1,0 +1,143 @@
+# CI runs only the jobs for the parts of the repo a pull request actually changed,
+# and every job calls a `make` target rather than repeating its flags here
+# (BUILD_PLAN.md, §0 rules 11 and 1).
+#
+# `ci-ok` is the ONLY required status check on main. It passes when every job that
+# ran passed, and treats skipped jobs as fine, so a PR touching one area is never
+# blocked waiting for jobs that had no reason to run.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: dorny/paths-filter@v4.0.3
+        id: filter
+        with:
+          # The Makefile and this workflow are shared infrastructure for the
+          # backend and frontend jobs, so a change to either re-runs both.
+          # `infrastructure/**` has no Makefile targets until Step 14; the infra
+          # filter widens to include them in that step.
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'docker-compose.dev.yml'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - '.nvmrc'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+            infra:
+              - 'infrastructure/**'
+
+  backend:
+    name: Backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:19
+        env:
+          POSTGRES_USER: doodle
+          POSTGRES_PASSWORD: doodle
+          POSTGRES_DB: doodle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U doodle -d doodle"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://doodle:doodle@127.0.0.1:5432/doodle
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: make backend-install
+      - run: make ci-backend
+
+  frontend:
+    name: Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: make frontend-install
+      - run: make ci-frontend
+
+  infra:
+    name: Infrastructure
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # No cloud credentials: this job only runs `terraform fmt -check` and
+      # `terraform validate`, which need no backend and touch nothing.
+      - uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - run: make ci-infra
+
+  ci-ok:
+    name: ci-ok
+    needs: [changes, backend, frontend, infra]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that every job which ran passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "job results: ${RESULTS}"
+          for result in ${RESULTS}; do
+            case "${result}" in
+              success|skipped) ;;
+              *)
+                echo "::error::A CI job finished with '${result}'."
+                exit 1
+                ;;
+            esac
+          done
+          echo "All jobs that ran passed; skipped jobs are expected."

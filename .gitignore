@@ -27,11 +27,14 @@ coverage.xml
 
 # ---- Node ----
 node_modules/
+logs/
+*.log
 dist/
 dist-ssr/
 build/
 .vite/
 *.local
+*.tsbuildinfo
 npm-debug.log*
 yarn-error.log*
 .eslintcache
