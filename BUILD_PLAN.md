@@ -8,9 +8,10 @@ A web app for playing "telephone pictionary" with family. Each player starts a "
 
 ## 0. Working agreement (applies to every step)
 
-1. **One step = one branch = one PR.** Branch names are `<type>/<short-name>` with no step numbers (types: `feat`, `chore`, `infra`, `ci`, `docs`, `fix`), for example `feat/game-engine`, `chore/scaffold`, `infra/terraform`. Always branch from an up-to-date `main`. Open the PR with `gh pr create`; the description contains: what changed, how to review it, how to run it, and anything deferred.
+1. **One step = one branch.** A step may be **more than one PR** where that gives a cleaner split (see rule 3). Branch names are `<type>/<short-name>` with no step numbers (types: `feat`, `chore`, `infra`, `ci`, `docs`, `fix`), for example `feat/game-engine`, `chore/scaffold`, `infra/terraform`. Always branch from an up-to-date `main`. Open the PR with `gh pr create`; the description contains: what changed, how to review it, how to run it, and anything deferred.
+   **Commit in small, logically ordered steps.** A PR is read commit by commit, so commit at each natural checkpoint as the work happens rather than squashing a step into one large commit. Plan the commit sequence before starting (for example: models, then rotation, then dealing, then serialisation, then tests) and say what it is in the PR description.
 2. **Stop after each PR.** Summarise the PR in a few lines and wait for me to say "merged" or "go" before starting the next step. Never merge PRs yourself and never start the next step on an unmerged branch.
-3. **Keep PRs small and reviewable.** If a step is growing beyond roughly 600 changed lines (excluding lockfiles), split it and tell me.
+3. **Split PRs by logical unit, not by line count.** There is no fixed line budget. Divide a step where the *meaning* divides: data separately from the logic that consumes it (the word bank is its own PR, separate from the game engine), a standalone component separately from the screens that use it, a pure module separately from its wiring. Propose the split up front, say which PR each piece lands in, and keep every PR independently reviewable and green.
 4. **Tests are part of the step.** Each step lists acceptance checks. Run them and report the results honestly, including failures.
 5. **Never commit secrets** (tokens, keys, connection strings, `.tfvars` with real values, `.env`). Add them to `.gitignore` before they exist. Never print secret values in chat.
 6. **Ask before anything that costs money or is hard to reverse.** For Terraform, always run `terraform plan`, show me the summary, and wait for explicit approval before `terraform apply`. Don't create cloud resources outside Terraform, except the three manual items in Step 15 (the Terraform state bucket, the Neon project, and the database secret's value).
@@ -675,3 +676,26 @@ the backend with the path intact (confirmed in uvicorn's own request log) and
 upgrades `/ws/...` through to it. The first proxy check was run against the wrong
 port — 5173 was already held by an unrelated container, so Vite had silently fallen
 back to 5174 — and was redone on a pinned free port with `--strictPort`.
+
+### Housekeeping before Step 2 (21 Nov 2026)
+
+Two corrections, neither of them new build work.
+
+1. **Working agreement rules 1 and 3 rewritten** at Ryan's request, after Step 1
+   arrived as a single large commit:
+   - Rule 1 now requires **small, logically ordered commits** within a PR, planned
+     before the work starts, and allows a step to span more than one PR.
+   - Rule 3's ~600-line budget is replaced by **splitting on logical units**. A
+     diff staying under an arbitrary number is not the goal; dividing where the
+     meaning divides is. His example, applied immediately below.
+2. **`.nvmrc` moved from the repo root to `frontend/`.** Step 1 put it at the root
+   on the mistaken reasoning that the Makefile needed it there; the Makefile drives
+   npm with `--prefix frontend` and never consults nvm. The root placement also
+   broke symmetry with `backend/.python-version`. Each stack now pins its own
+   runtime version beside the code that needs it. `actions/setup-node` reads the
+   new path, and the frontend path filter drops its now-redundant `.nvmrc` entry.
+
+**Consequence for Step 2:** it ships as **two PRs** rather than one —
+`feat/word-bank` (`words.json` plus dealing, shuffling and the uniqueness tests)
+and `feat/game-engine` (models, rotation, transitions, `view_for`, serialisation).
+Data is reviewed separately from the logic that consumes it.
