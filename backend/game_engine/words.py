@@ -20,6 +20,9 @@ from importlib.resources import files
 
 __all__ = ["DEFAULT_OPTION_COUNT", "WordBank", "WordBankExhausted", "load_words"]
 
+# Keys used in the snapshot written to games.snapshot (BUILD_PLAN.md, section 3).
+_POOL, _HELD, _DISCARDED, _RETIRED = "pool", "held", "discarded", "retired"
+
 DEFAULT_OPTION_COUNT = 3
 
 
@@ -98,6 +101,44 @@ class WordBank:
             self._discarded.extend(other for other in held if other != word)
         else:
             self._discarded.extend(held)
+
+    # -- snapshots --------------------------------------------------------
+
+    def to_dict(self) -> dict[str, object]:
+        """A JSON-safe snapshot of the whole bank.
+
+        The held options are included so that a player who reconnects mid
+        round 0 is shown the *same* three words, rather than a fresh deal that
+        might collide with another player's (BUILD_PLAN.md, Step 5).
+
+        `held` is a list of pairs, not a mapping: JSON object keys must be
+        strings, and round-tripping seat numbers through strings is a bug
+        waiting to happen.
+        """
+        return {
+            _POOL: list(self._pool),
+            _HELD: [[seat, list(options)] for seat, options in sorted(self._held.items())],
+            _DISCARDED: list(self._discarded),
+            _RETIRED: sorted(self._retired),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object], rng: random.Random) -> WordBank:
+        """Rebuild a bank from `to_dict`, with fresh randomness.
+
+        The rng is not part of the snapshot: which words come next only has to
+        be unpredictable, never reproducible across a reload.
+
+        Built without `__init__` on purpose, because the state is restored
+        verbatim and must not be reshuffled.
+        """
+        bank = object.__new__(cls)
+        bank._rng = rng
+        bank._pool = deque(data[_POOL])  # type: ignore[arg-type]
+        bank._held = {int(seat): tuple(options) for seat, options in data[_HELD]}  # type: ignore[misc,union-attr]
+        bank._discarded = list(data[_DISCARDED])  # type: ignore[arg-type]
+        bank._retired = set(data[_RETIRED])  # type: ignore[arg-type]
+        return bank
 
     # -- internals --------------------------------------------------------
 

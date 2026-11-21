@@ -4,6 +4,7 @@ The headline guarantee is that no two players are ever dealt the same word, so
 most of these hammer that invariant from different directions.
 """
 
+import json
 import random
 
 import pytest
@@ -192,3 +193,66 @@ def test_the_same_seed_deals_the_same_words() -> None:
 
 def test_different_seeds_deal_differently() -> None:
     assert make_bank(seed=1).deal(0) != make_bank(seed=2).deal(0)
+
+
+# -- snapshots -----------------------------------------------------------
+
+
+def restore(bank: WordBank, seed: int = 99) -> WordBank:
+    """Round-trip through real JSON, as the Postgres snapshot will."""
+    return WordBank.from_dict(json.loads(json.dumps(bank.to_dict())), random.Random(seed))
+
+
+def test_a_restored_bank_shows_players_the_same_options() -> None:
+    """A player reconnecting mid round 0 must not be re-dealt."""
+    bank = make_bank(seed=21)
+    before = {seat: bank.deal(seat) for seat in range(5)}
+
+    restored = restore(bank)
+
+    assert {seat: restored.options_for(seat) for seat in range(5)} == before
+
+
+def test_a_restored_bank_still_refuses_to_repeat_a_word() -> None:
+    bank = make_bank(seed=22)
+    for seat in range(4):
+        bank.deal(seat)
+    held = {word for seat in range(4) for word in bank.options_for(seat)}
+
+    restored = restore(bank)
+
+    for seat in range(4, 8):
+        assert not set(restored.deal(seat)) & held
+
+
+def test_a_restored_bank_remembers_retired_words() -> None:
+    bank = make_bank(seed=23, words=[f"w{i}" for i in range(12)])
+    chosen = bank.deal(0)[0]
+    bank.pick(0, chosen)
+
+    restored = restore(bank)
+
+    for _ in range(40):
+        for seat in range(3):
+            assert chosen not in restored.deal(seat)
+
+
+def test_the_snapshot_is_json_safe() -> None:
+    bank = make_bank(seed=24)
+    bank.deal(0)
+    bank.pick(0, bank.options_for(0)[0])
+    bank.deal(1)
+
+    snapshot = bank.to_dict()
+
+    assert json.loads(json.dumps(snapshot)) == snapshot
+
+
+def test_round_tripping_twice_is_stable() -> None:
+    bank = make_bank(seed=25)
+    for seat in range(3):
+        bank.deal(seat)
+
+    once = restore(bank)
+
+    assert restore(once).to_dict() == once.to_dict()
