@@ -12,10 +12,26 @@ from enum import StrEnum
 
 from game_engine.words import WordBank
 
-__all__ = ["Book", "Game", "Page", "PageKind", "Phase", "Player", "Reveal"]
+__all__ = [
+    "MAX_NAME_LENGTH",
+    "MAX_PLAYERS",
+    "MAX_TEXT_LENGTH",
+    "MIN_PLAYERS",
+    "Book",
+    "Game",
+    "Page",
+    "PageKind",
+    "Phase",
+    "Player",
+    "Reveal",
+]
 
+# The rules live here so that `api` can import them rather than restate them;
+# a limit written down twice is a limit that will disagree with itself.
 MIN_PLAYERS = 3
 MAX_PLAYERS = 10
+MAX_NAME_LENGTH = 20
+MAX_TEXT_LENGTH = 100
 
 
 class Phase(StrEnum):
