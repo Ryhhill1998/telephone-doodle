@@ -46,7 +46,7 @@ select = [
 # tests/game_engine/test_package_boundaries.py fails if a package on disk is
 # missing from root_packages, so the two cannot drift apart.
 [tool.importlinter]
-root_packages = ["game_engine"]
+root_packages = ["game_engine", "storage"]
 
 [[tool.importlinter.contracts]]
 name = "Packages are layered, top to bottom"
@@ -54,7 +54,11 @@ type = "layers"
 layers = [
     "(api)",
     "(rooms)",
-    "game_engine : (storage)",
+    # Siblings on one layer, separated by `:`, are independent: `game_engine`
+    # and `storage` may not import each other in either direction. `rooms`
+    # sits above both and translates, which is what keeps the rules free of
+    # SQL and the SQL free of the rules.
+    "game_engine : storage",
 ]
 
 [tool.pytest.ini_options]
