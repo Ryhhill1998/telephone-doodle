@@ -22,5 +22,11 @@ Do not run tests, lint, builds, installs, Docker, Terraform or any cloud command
 - No subagents, web searches or `/claude-api` unless the step says so or the user asks.
 - If context passes about 100k tokens, say so.
 
+## No code in the terminal
+Never paste file contents, diffs or code blocks into a chat response. The user reviews every change in GitHub (comparing branches/PRs), not in the terminal, and will not read code shown there. Terminal responses are prose only: what changed, why, which files, and the PR/commit link. This doesn't change what you do with Read/Edit/Write/git — only what you print back to the user.
+
+## Keep `.claude/progress.json` live, not just at the end
+See the `progress-statusline-and-pr-alert` memory for the full contract. The short version: rewrite `step`, `percent` and `note` as the work actually moves, not only once at the start and once at the end of a step — a stale 100%/`ready` left over from the previous step looks identical to real work being stuck. At the start of a new step, reset it immediately (low `percent`, `state: "working"`) before doing anything else.
+
 ## End of every step
 Update `docs/PROGRESS.md`: tick the step and add at most 5 lines under "What exists".
