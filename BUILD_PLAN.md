@@ -121,6 +121,8 @@ Run the backend from `backend/` with `uv run uvicorn main:app`. Imports are plai
 
 **Dependency direction (enforce it):** `api` calls `rooms`; `rooms` calls `game_engine` and `storage`; `game_engine` imports nothing from the other packages. `game_engine` must stay free of I/O so it is trivially unit-testable.
 
+*How it is enforced* (added in Step 2b's review): the layering is an import-linter contract in `backend/pyproject.toml`, run by `make backend-lint`. The layers that do not exist yet are written in parentheses, so each one starts being checked in the step that creates it. **Every step that adds a package must also add it to `root_packages` and un-parenthesise its layer** — a package missing from `root_packages` is absent from the import graph, so its contract passes by having nothing to check. `tests/game_engine/test_package_boundaries.py` fails when the config and the packages on disk disagree, so this cannot be forgotten silently; it also holds `game_engine`'s import allowlist and the ban on the global `random` generator.
+
 ---
 
 ## 3. Architecture reference
@@ -256,7 +258,7 @@ Branch `feat/storage`.
 - Functions: `create_game(code, host_name) -> id`, `save_snapshot(id, status, snapshot, expected_version) -> new_version | conflict` (the version-guarded write from section 3), `load_game(code) -> (id, version, snapshot) | None` (active games only), `finish_game(id, players, books, pages)` (one transaction: writes `players`, `books` and `pages`, sets status `finished` and `finished_at`, clears `snapshot`), `get_finished_game(id)` (used by tests and kept for v1; no endpoint uses it in v0), `delete_stale_games(older_than)`.
 - Tests against the local Postgres from `docker-compose.dev.yml` (and the service container in CI): create then finish round trip (names, words and pages all stored), partial unique index on `code` (a finished code can be reused, an active one cannot), snapshot overwrite, a stale `expected_version` is rejected, missing code returns `None`, stale deletion leaves finished games alone.
 
-**Review checklist:** no ORM and no migration tool; schema creation is idempotent; the connection string comes only from `DATABASE_URL`.
+**Review checklist:** no ORM and no migration tool; schema creation is idempotent; the connection string comes only from `DATABASE_URL`; `storage` is added to import-linter's `root_packages` and its layer un-parenthesised (see section 2).
 
 ---
 
@@ -274,7 +276,7 @@ Branch `feat/api`.
 - **Structured logging from day one:** JSON log lines to stdout (Cloud Run ships them to Cloud Logging for free), each with an event name and a few fields: `room_created`, `player_joined`, `game_started`, `game_finished`, `ws_connected`, `ws_closed` (with close code), `snapshot_conflict`, `rate_limited`. No player names or drawing content in logs. This makes the later observability work (see the v1 backlog) a configuration job, not a rewrite.
 - Tests using FastAPI's test client WebSocket support: a scripted 3-player game from lobby through reveal and finish, reconnect mid-round, reconnect during the reveal lands on the current page, a non-host `reveal_next` is rejected, invalid message rejected, oversize payload rejected, skip-player, disallowed origin rejected.
 
-**Review checklist:** a full game can be played with only a test script (no UI); `game_engine` untouched except for bug fixes (call these out); the dependency direction in section 2 holds.
+**Review checklist:** a full game can be played with only a test script (no UI); `game_engine` untouched except for bug fixes (call these out); the dependency direction in section 2 holds, with `api` and `rooms` added to import-linter's `root_packages` and their layers un-parenthesised.
 
 ---
 
@@ -841,3 +843,11 @@ probed by introducing the violation they catch — `import datetime` (the hole
 the old denylist had), `random.shuffle`, a package left out of
 `root_packages`, and `game_engine` importing a sibling — and each failed as
 intended.
+
+4. **The plan itself was amended, not just the log.** Section 2 now records
+   *how* the dependency direction is enforced, and the review checklists for
+   Steps 3 and 4 require each new package to be added to import-linter's
+   `root_packages` with its layer un-parenthesised. Without that, a step could
+   add `rooms/` and leave the layering silently unchecked for it. The drift
+   test fails in that case, so the plan now says what the fix is rather than
+   leaving the next session to work it out from a failing assertion.
