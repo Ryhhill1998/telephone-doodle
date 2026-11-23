@@ -13,14 +13,17 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Self
+import secrets
+from typing import Any, NamedTuple, Self
 
+import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool, PoolTimeout
 
-from storage.schema import SCHEMA_SQL
+from storage.schema import ACTIVE_CODE_INDEX, SCHEMA_SQL, GameStatus
 
-__all__ = ["Database"]
+__all__ = ["ActiveGame", "Database", "RoomCodeTaken"]
 
 #: Neon's free-plan compute suspends after five minutes idle and takes about a
 #: second to wake, so the first connection after a quiet spell is slow but not
@@ -35,6 +38,29 @@ RETRY_DELAY_SECONDS = 1.0
 #: Idle connections cost Neon compute-hours, hence the small floor.
 MIN_POOL_SIZE = 1
 MAX_POOL_SIZE = 10
+
+#: `secrets.token_urlsafe(6)` is eight characters, which is what Step 3 asks
+#: for. The id is internal -- nothing in v0 links to it -- so it only has to be
+#: unguessable enough that a future permalink feature is not born broken.
+GAME_ID_BYTES = 6
+
+
+class RoomCodeTaken(Exception):
+    """A game that is still being played already holds this room code.
+
+    The partial unique index is the only authority on this. `RoomManager` keeps
+    its own set of live codes, but that set is empty after a cold start while
+    the database still remembers every unfinished game, so the insert is what
+    actually decides. The caller's answer is to pick another code.
+    """
+
+
+class ActiveGame(NamedTuple):
+    """An unfinished game, as `load_game` returns it."""
+
+    id: str
+    version: int
+    snapshot: dict[str, Any] | None
 
 
 class Database:
@@ -124,3 +150,117 @@ class Database:
         """
         async with self._pool.connection() as conn:
             await conn.execute(SCHEMA_SQL)
+
+    # -- games in progress ------------------------------------------------
+
+    async def create_game(self, code: str) -> str:
+        """Record a new game and return its id.
+
+        Called when the room is created, not when it starts: one room hosts
+        exactly one game, and "play again" makes a new room (BUILD_PLAN.md,
+        section 3). The creator is the only player and holds seat 0, so
+        `host_idx` and `player_count` have exactly one possible value here;
+        `save_snapshot` keeps them true from then on.
+
+        Raises `RoomCodeTaken` if an unfinished game already has the code.
+        """
+        game_id = secrets.token_urlsafe(GAME_ID_BYTES)
+
+        try:
+            async with self._pool.connection() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO games (id, code, status, host_idx, player_count)
+                    VALUES (%s, %s, %s, 0, 1)
+                    """,
+                    (game_id, code, GameStatus.LOBBY),
+                )
+        except psycopg.errors.UniqueViolation as exc:
+            if exc.diag.constraint_name == ACTIVE_CODE_INDEX:
+                raise RoomCodeTaken(code) from exc
+            raise
+
+        return game_id
+
+    async def load_game(self, code: str) -> ActiveGame | None:
+        """The unfinished game holding this code, if there is one.
+
+        Finished games are excluded rather than merely ordered last: their
+        codes are free to be reused, so a code can match both an old finished
+        game and the one being played right now. The partial unique index
+        guarantees at most one of the latter.
+        """
+        async with self._pool.connection() as conn:
+            cursor = await conn.execute(
+                """
+                SELECT id, version, snapshot
+                  FROM games
+                 WHERE code = %s AND status <> %s
+                """,
+                (code, GameStatus.FINISHED),
+            )
+            row = await cursor.fetchone()
+
+        if row is None:
+            return None
+        return ActiveGame(id=row["id"], version=row["version"], snapshot=row["snapshot"])
+
+    async def save_snapshot(
+        self,
+        game_id: str,
+        *,
+        status: GameStatus,
+        host_idx: int,
+        player_count: int,
+        snapshot: dict[str, Any],
+        expected_version: int,
+    ) -> int | None:
+        """Write the whole game state, guarded by its version.
+
+        Returns the new version, or `None` if the write was refused because
+        somebody else got there first.
+
+        The guard is the whole point. Cloud Run overlaps the old and new
+        instances during a deploy, so two processes can briefly hold the same
+        room; without `WHERE version = ...` the slower one would quietly
+        overwrite the faster one's moves. A `None` here tells the caller to
+        drop its in-memory room and close its sockets with 1012, which is
+        wired up in Step 5.
+
+        `host_idx` and `player_count` are passed in rather than left at their
+        creation values: players join, and the host moves when seats are
+        shuffled, so the columns would otherwise describe a game nobody played.
+        """
+        async with self._pool.connection() as conn:
+            cursor = await conn.execute(
+                """
+                UPDATE games
+                   SET status       = %(status)s,
+                       host_idx     = %(host_idx)s,
+                       player_count = %(player_count)s,
+                       snapshot     = %(snapshot)s,
+                       version      = version + 1,
+                       updated_at   = now(),
+                       -- Stamped once, on the move out of the lobby, and never
+                       -- touched again.
+                       started_at   = CASE
+                                        WHEN started_at IS NOT NULL THEN started_at
+                                        WHEN %(status)s = %(lobby)s THEN NULL
+                                        ELSE now()
+                                      END
+                 WHERE id = %(id)s AND version = %(expected_version)s
+                RETURNING version
+                """,
+                {
+                    "id": game_id,
+                    "status": status,
+                    "host_idx": host_idx,
+                    "player_count": player_count,
+                    "snapshot": Jsonb(snapshot),
+                    "expected_version": expected_version,
+                    "lobby": GameStatus.LOBBY,
+                },
+            )
+            row = await cursor.fetchone()
+
+        return None if row is None else row["version"]

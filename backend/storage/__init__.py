@@ -10,11 +10,15 @@ translates between them. That is why nothing here mentions `Game`, `Book` or
 `Page` -- a finished game arrives as the plain rows this package defines.
 """
 
-from storage.database import Database
-from storage.schema import SCHEMA_SQL, TABLES
+from storage.database import ActiveGame, Database, RoomCodeTaken
+from storage.schema import ACTIVE_CODE_INDEX, SCHEMA_SQL, TABLES, GameStatus
 
 __all__ = [
+    "ACTIVE_CODE_INDEX",
     "SCHEMA_SQL",
     "TABLES",
+    "ActiveGame",
     "Database",
+    "GameStatus",
+    "RoomCodeTaken",
 ]
