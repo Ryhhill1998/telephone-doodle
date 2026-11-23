@@ -11,6 +11,7 @@ translates between them. That is why nothing here mentions `Game`, `Book` or
 """
 
 from storage.database import ActiveGame, Database, RoomCodeTaken
+from storage.records import BookRow, FinishedGame, PageRow, PlayerRow
 from storage.schema import ACTIVE_CODE_INDEX, SCHEMA_SQL, TABLES, GameStatus
 
 __all__ = [
@@ -18,7 +19,11 @@ __all__ = [
     "SCHEMA_SQL",
     "TABLES",
     "ActiveGame",
+    "BookRow",
     "Database",
+    "FinishedGame",
     "GameStatus",
+    "PageRow",
+    "PlayerRow",
     "RoomCodeTaken",
 ]

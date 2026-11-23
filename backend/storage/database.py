@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import os
 import secrets
+from collections.abc import Sequence
 from typing import Any, NamedTuple, Self
 
 import psycopg
@@ -21,6 +22,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool, PoolTimeout
 
+from storage.records import BookRow, FinishedGame, PageRow, PlayerRow
 from storage.schema import ACTIVE_CODE_INDEX, SCHEMA_SQL, GameStatus
 
 __all__ = ["ActiveGame", "Database", "RoomCodeTaken"]
@@ -264,3 +266,113 @@ class Database:
             row = await cursor.fetchone()
 
         return None if row is None else row["version"]
+
+    # -- finished games ---------------------------------------------------
+
+    async def finish_game(
+        self,
+        game_id: str,
+        *,
+        players: Sequence[PlayerRow],
+        books: Sequence[BookRow],
+        pages: Sequence[PageRow],
+    ) -> None:
+        """Write the finished game and clear its snapshot, all or nothing.
+
+        One transaction because the four writes only mean anything together: a
+        game marked finished whose pages failed to insert has lost them, and
+        pages written against a game still marked in progress would be loaded
+        back into memory and played on.
+
+        Clearing the snapshot is what removes the player tokens (BUILD_PLAN.md,
+        section 1), and the version bump invalidates any snapshot write still
+        in flight from another instance.
+
+        Not idempotent: a second call collides on the primary keys and rolls
+        back. That is the intended noise -- a game finishes once.
+        """
+        async with self._pool.connection() as conn, conn.transaction():
+            await conn.cursor().executemany(
+                "INSERT INTO players (game_id, idx, name) VALUES (%s, %s, %s)",
+                [(game_id, player.idx, player.name) for player in players],
+            )
+            await conn.cursor().executemany(
+                "INSERT INTO books (game_id, idx, owner_idx, word) VALUES (%s, %s, %s, %s)",
+                [(game_id, book.idx, book.owner_idx, book.word) for book in books],
+            )
+            await conn.cursor().executemany(
+                """
+                INSERT INTO pages (game_id, book_idx, round, author_idx, kind, text, strokes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                [
+                    (
+                        game_id,
+                        page.book_idx,
+                        page.round,
+                        page.author_idx,
+                        page.kind,
+                        page.text,
+                        Jsonb(page.strokes) if page.strokes is not None else None,
+                    )
+                    for page in pages
+                ],
+            )
+            await conn.execute(
+                """
+                UPDATE games
+                   SET status       = %s,
+                       player_count = %s,
+                       finished_at  = now(),
+                       updated_at   = now(),
+                       version      = version + 1,
+                       snapshot     = NULL
+                 WHERE id = %s
+                """,
+                (GameStatus.FINISHED, len(players), game_id),
+            )
+
+    async def get_finished_game(self, game_id: str) -> FinishedGame | None:
+        """Read a finished game back.
+
+        No endpoint calls this in v0 -- there is no archive page and no
+        permalink. It is what proves the write above kept everything, and it
+        is the shape v1's highlights and voting features will want.
+        """
+        async with self._pool.connection() as conn:
+            cursor = await conn.execute(
+                """
+                SELECT id, code, host_idx, player_count, finished_at
+                  FROM games
+                 WHERE id = %s AND status = %s
+                """,
+                (game_id, GameStatus.FINISHED),
+            )
+            game = await cursor.fetchone()
+            if game is None:
+                return None
+
+            cursor = await conn.execute(
+                "SELECT idx, name FROM players WHERE game_id = %s ORDER BY idx",
+                (game_id,),
+            )
+            players = [PlayerRow(**row) for row in await cursor.fetchall()]
+
+            cursor = await conn.execute(
+                "SELECT idx, owner_idx, word FROM books WHERE game_id = %s ORDER BY idx",
+                (game_id,),
+            )
+            books = [BookRow(**row) for row in await cursor.fetchall()]
+
+            cursor = await conn.execute(
+                """
+                SELECT book_idx, round, author_idx, kind, text, strokes
+                  FROM pages
+                 WHERE game_id = %s
+                 ORDER BY book_idx, round
+                """,
+                (game_id,),
+            )
+            pages = [PageRow(**row) for row in await cursor.fetchall()]
+
+        return FinishedGame(**game, players=players, books=books, pages=pages)
