@@ -70,9 +70,10 @@ dev-frontend: ## Run the Vite dev server (proxies /api and /ws to the backend)
 # ---------------------------------------------------------------------------
 
 .PHONY: backend-lint
-backend-lint: ## Lint and format-check the backend with ruff
+backend-lint: ## Lint, format-check and check the package layering of the backend
 	$(UV) run ruff check .
 	$(UV) run ruff format --check .
+	$(UV) run lint-imports
 
 .PHONY: backend-format
 backend-format: ## Apply ruff's formatting and safe fixes to the backend
