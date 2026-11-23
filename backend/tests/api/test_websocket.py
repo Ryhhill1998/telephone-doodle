@@ -96,7 +96,7 @@ async def test_full_game_from_lobby_through_reveal_to_finish(
         with ExitStack() as stack:
             sockets = _connect_all(stack, client, code, tokens)
             states = _play_to_reveal(sockets)
-            assert states[0]["reveal"] == {"book": 0, "step": 0}
+            assert (states[0]["reveal"]["book"], states[0]["reveal"]["step"]) == (0, 0)
 
             # Only the host may move the reveal pointer; the sender alone
             # hears about the rejection, and the pointer does not move.
@@ -105,7 +105,7 @@ async def test_full_game_from_lobby_through_reveal_to_finish(
             assert error["type"] == "error"
 
             last_book = len(sockets) - 1
-            while states[0]["reveal"] != {"book": last_book, "step": 3}:
+            while (states[0]["reveal"]["book"], states[0]["reveal"]["step"]) != (last_book, 3):
                 sockets[0].send_json({"type": "reveal_next"})
                 states = _drain(sockets)
 
@@ -241,11 +241,13 @@ def test_disallowed_origin_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     with TestClient(app) as client:
         code, tokens = _setup_three_players(client)
 
-        with pytest.raises(WebSocketDisconnect) as exc_info:
-            with client.websocket_connect(
+        with (
+            pytest.raises(WebSocketDisconnect) as exc_info,
+            client.websocket_connect(
                 f"/ws/{code}?token={tokens[0]}",
                 headers={"origin": "https://evil.example"},
-            ):
-                pass
+            ),
+        ):
+            pass
 
     assert exc_info.value.code == 4403
