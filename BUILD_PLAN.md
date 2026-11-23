@@ -611,7 +611,7 @@ Each is applied (and logged again) in the step it belongs to:
 | Python | **3.15.2** (`.python-version` pins `3.15`, uv fetches the interpreter) |
 | FastAPI 0.165.0 | uvicorn 0.54.0 (`[standard]`), starlette 1.10.0, pydantic 2.14.4 |
 | psycopg | 3.3.9 (`[binary,pool]`), psycopg-pool 3.3.3 |
-| Backend dev | pytest 9.2.0, pytest-asyncio 1.5.0, pytest-cov 7.1.0, ruff 0.17.6, httpx2 2.16.2 |
+| Backend dev | pytest 9.2.0, pytest-asyncio 1.5.0, pytest-cov 7.1.0, ruff 0.17.6, httpx2 2.16.2, import-linter 2.17 (grimp 3.20) |
 | Node | **26.13.1** (Latest LTS "Lithium"), npm 11.20.0 |
 | Frontend | Vite 8.3.6, React 19.3.1, TypeScript 7.0.2, @vitejs/plugin-react 6.1.2 |
 | Frontend dev | vitest 5.1.1, @vitest/coverage-v8 5.1.1, jsdom 31.0.1, Testing Library (react 16.3.3, dom 10.4.2, jest-dom 8.0.0, user-event 14.6.13), oxlint 1.90.0 |
@@ -722,6 +722,9 @@ reviewed apart from the engine that consumes them.
    also bans calls to the global `random` generator, which would quietly make
    games unreplayable. All three rules were probed by introducing the violation
    they catch, so they are known to fail and not merely to pass.
+   *(Superseded during the Step 2b review — see "Step 2b review" below. The
+   layering moved to import-linter and the file became
+   `tests/game_engine/test_package_boundaries.py`.)*
 3. **`WordBank.to_dict`/`from_dict` ship here rather than with the engine.**
    The plan lists serialisation under the engine's `to_dict(game)`. The bank
    owns state the engine cannot reconstruct — which options each player is
@@ -783,3 +786,58 @@ Second of Step 2's two PRs: the rules that consume the word bank.
 checklist asks for >= 90%); `make lint` and `make test` green. The secrecy
 tests were checked by deliberately introducing three leaks — every book's word,
 the whole book history, and a token — and confirming the suite failed each time.
+
+### Step 2b review — package boundaries (23 Nov 2026)
+
+Changes made to the Step 2b branch in review, before merge.
+
+1. **Function-level imports in the tests were hoisted.** Six imports sat
+   inside test functions and helpers, each pulling a symbol from a module the
+   same file already imported at the top (`conftest.py` imported
+   `game_engine.game` two lines above a helper that re-imported it). None of
+   the reasons to defer an import applied: tests are leaves of the import
+   graph, so there was no cycle to break, and nothing was optional or
+   expensive. Deferring them hid the module's dependency surface from ruff's
+   unused-import rule and turned a renamed engine symbol into one failing test
+   at run time instead of a collection error naming every affected file.
+
+2. **The layering moved to import-linter; the custom test kept only what a
+   linter cannot express.** Step 2a's test had two weaknesses. Both of its
+   rules were denylists, so each caught only the modules somebody had thought
+   to name — `IO_MODULES` banned `time` but not `datetime`, so a clock could
+   sit in the rules under a green purity check, and `SIBLING_PACKAGES` was
+   hardcoded, so a package added in a later step would silently stop being
+   guarded against. And it read one file at a time, so it could never see an
+   indirect chain (`api -> rooms -> api`), which is how layering actually
+   breaks. Split by what each tool is good at:
+   - **import-linter** (configured in `backend/pyproject.toml`, run by `make
+     backend-lint`) owns the layering. It reads the real import graph and
+     follows indirect chains.
+   - **`tests/game_engine/test_package_boundaries.py`** owns the two rules no
+     import linter can express: an **allowlist** of what `game_engine` may
+     import, which subsumes both old denylists and has no holes to forget, and
+     the ban on the global `random` generator, which is a rule about a *call*,
+     not an import. Step 2b deviation 7's `random.Random` allowance is carried
+     over unchanged.
+
+3. **The layers contract is written for the finished architecture.**
+   `api`, `rooms` and `storage` do not exist yet, so they appear in parentheses
+   — import-linter tolerates a missing optional layer — and each starts being
+   enforced in the step that creates it, rather than needing someone to
+   remember to add it then. `root_packages` cannot name a package that does not
+   exist, and a package missing from it is simply absent from the graph, so its
+   contracts pass by having nothing to check. A third test compares
+   `root_packages` against the packages on disk so the two cannot drift apart.
+
+**Not done:** import-linter checks nothing today beyond what the allowlist
+already does, because `game_engine` is the only package that exists and it sits
+at the bottom of the order. It is set up now so that Step 4 is not the step
+that both builds the API and invents its own guardrails.
+
+**Verified:** 336 tests (the two parametrised denylists, 16 tests, became one
+parametrised allowlist plus the drift guard, 9); `game_engine` still at 100%
+statement coverage; `make lint` and `make test` green. All four guards were
+probed by introducing the violation they catch — `import datetime` (the hole
+the old denylist had), `random.shuffle`, a package left out of
+`root_packages`, and `game_engine` importing a sibling — and each failed as
+intended.
