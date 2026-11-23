@@ -44,8 +44,21 @@ Not all of these exist yet — they are created step by step.
 
 ## Development
 
-Every command is a `make` target, and CI calls those same targets. The Makefile
-arrives in the first scaffolding step.
+Every command is a `make` target, and CI calls those same targets. `make help`
+lists them.
+
+```sh
+make db        # local Postgres in Docker (the backend tests need it)
+make install   # backend and frontend dependencies
+make test      # backend and frontend suites
+make lint
+```
+
+The backend tests run against a real Postgres rather than a fake, because what
+they check — a partial unique index, a version-guarded write, a transaction that
+has to be all or nothing — is decided by the database. `DATABASE_URL` points at
+the container above by default; in production it comes from Secret Manager, and
+there is no fallback if it is unset.
 
 ## Contributing
 
