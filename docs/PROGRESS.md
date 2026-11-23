@@ -6,7 +6,7 @@ Update at the end of every step: tick it and add at most 5 lines under "What exi
 - [x] 0 Preflight and repo creation
 - [x] 1 Project scaffolding and CI
 - [x] 2 Game engine (2a word bank, 2b engine)
-- [ ] 3 Storage layer: PR open, under review
+- [x] 3 Storage layer
 - [ ] 4 Rooms and realtime API  <- NEXT
 - [ ] 5 Durable games
 - [ ] 6 Rate limits and abuse protection
