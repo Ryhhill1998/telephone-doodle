@@ -740,3 +740,46 @@ words would leak what someone else chose.
 
 **Verified:** 44 tests pass; `game_engine` coverage 100% (the checklist asks for
 >= 90%); `make lint` and `make test` green.
+
+### Step 2b — game engine (23 Nov 2026)
+
+Second of Step 2's two PRs: the rules that consume the word bank.
+
+**Deviations:**
+
+1. **`host_idx` is derived, not stored.** Section 3's `games` table has a
+   `host_idx` column, so the plan implies storing it. The engine instead marks
+   the host on the `Player` and derives the index. Shuffling seats and removing
+   players would both otherwise have to remember to move a stored number, and
+   forgetting once hands the game to the wrong person. Storage writes the
+   derived value to its column in Step 3.
+2. **"Has this player submitted?" is derived too**, from whether their current
+   book has a page for this round, rather than tracked in a set that is reset
+   each round. Two sources of the same truth can disagree; one cannot.
+3. **`reveal_next` and `reveal_prev` clamp at the ends rather than raising.**
+   The plan does not say. Back is disabled on the first step in the UI and the
+   host is shown "Finish game" on the last, so a message arriving at either end
+   is a double-tap, not a bug worth failing a game over. `finish_reveal` before
+   the last step **is** rejected, because that would cut the game short for
+   everyone.
+4. **The host cannot be removed.** The plan says the host may remove a player
+   but does not say what happens if they remove themselves; the game would be
+   left without a host. Rejected outright. Removing a player mid-game is
+   already a v1 item.
+5. **Player limits live in `game_engine/models.py`** (`MIN_PLAYERS`,
+   `MAX_PLAYERS`, `MAX_NAME_LENGTH`, `MAX_TEXT_LENGTH`) rather than only in
+   `api`, which section 3 lists as the enforcement point. `api` imports them in
+   Step 4. A limit written down twice is a limit that will disagree with itself.
+6. **Only the host can move the reveal pointer, enforced in the engine.**
+   Section 3 describes this as an API rule. Putting it in the engine means it
+   holds for every caller, and the API layer stays a thin translation.
+7. **The dependency-direction rule was narrowed.** As first written in Step 2a
+   it banned every `random.*` call, which flagged `random.Random()` in
+   `snapshots.py` — the one construct that *is* injected randomness. It now
+   allowlists exactly that name, so any other function on the module is still
+   caught. Re-probed with `random.shuffle` to confirm.
+
+**Verified:** 343 tests; **`game_engine` at 100% statement coverage** (the
+checklist asks for >= 90%); `make lint` and `make test` green. The secrecy
+tests were checked by deliberately introducing three leaks — every book's word,
+the whole book history, and a token — and confirming the suite failed each time.
