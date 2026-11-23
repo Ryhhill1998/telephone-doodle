@@ -12,6 +12,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx2>=2.16.2",
+    "import-linter>=2.17",
     "pytest>=9.2.0",
     "pytest-asyncio>=1.5.0",
     "pytest-cov>=7.1.0",
@@ -32,6 +33,28 @@ select = [
     "B",   # bugbear
     "SIM", # simplify
     "RUF", # ruff-specific
+]
+
+# Package layering (BUILD_PLAN.md section 2): api calls rooms; rooms calls
+# game_engine and storage; game_engine calls nobody. import-linter checks the
+# real import graph, so it catches indirect chains (api -> rooms -> api) that a
+# per-file check cannot.
+#
+# Only packages that exist can be listed as roots, and layers in parentheses are
+# tolerated while they are missing, so this contract is written for the finished
+# architecture and starts enforcing each layer in the step that creates it.
+# tests/game_engine/test_package_boundaries.py fails if a package on disk is
+# missing from root_packages, so the two cannot drift apart.
+[tool.importlinter]
+root_packages = ["game_engine"]
+
+[[tool.importlinter.contracts]]
+name = "Packages are layered, top to bottom"
+type = "layers"
+layers = [
+    "(api)",
+    "(rooms)",
+    "game_engine : (storage)",
 ]
 
 [tool.pytest.ini_options]

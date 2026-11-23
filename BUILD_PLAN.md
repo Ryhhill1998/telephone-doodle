@@ -121,6 +121,8 @@ Run the backend from `backend/` with `uv run uvicorn main:app`. Imports are plai
 
 **Dependency direction (enforce it):** `api` calls `rooms`; `rooms` calls `game_engine` and `storage`; `game_engine` imports nothing from the other packages. `game_engine` must stay free of I/O so it is trivially unit-testable.
 
+*How it is enforced* (added in Step 2b's review): the layering is an import-linter contract in `backend/pyproject.toml`, run by `make backend-lint`. The layers that do not exist yet are written in parentheses, so each one starts being checked in the step that creates it. **Every step that adds a package must also add it to `root_packages` and un-parenthesise its layer** — a package missing from `root_packages` is absent from the import graph, so its contract passes by having nothing to check. `tests/game_engine/test_package_boundaries.py` fails when the config and the packages on disk disagree, so this cannot be forgotten silently; it also holds `game_engine`'s import allowlist and the ban on the global `random` generator.
+
 ---
 
 ## 3. Architecture reference
@@ -256,7 +258,7 @@ Branch `feat/storage`.
 - Functions: `create_game(code, host_name) -> id`, `save_snapshot(id, status, snapshot, expected_version) -> new_version | conflict` (the version-guarded write from section 3), `load_game(code) -> (id, version, snapshot) | None` (active games only), `finish_game(id, players, books, pages)` (one transaction: writes `players`, `books` and `pages`, sets status `finished` and `finished_at`, clears `snapshot`), `get_finished_game(id)` (used by tests and kept for v1; no endpoint uses it in v0), `delete_stale_games(older_than)`.
 - Tests against the local Postgres from `docker-compose.dev.yml` (and the service container in CI): create then finish round trip (names, words and pages all stored), partial unique index on `code` (a finished code can be reused, an active one cannot), snapshot overwrite, a stale `expected_version` is rejected, missing code returns `None`, stale deletion leaves finished games alone.
 
-**Review checklist:** no ORM and no migration tool; schema creation is idempotent; the connection string comes only from `DATABASE_URL`.
+**Review checklist:** no ORM and no migration tool; schema creation is idempotent; the connection string comes only from `DATABASE_URL`; `storage` is added to import-linter's `root_packages` and its layer un-parenthesised (see section 2).
 
 ---
 
@@ -274,7 +276,7 @@ Branch `feat/api`.
 - **Structured logging from day one:** JSON log lines to stdout (Cloud Run ships them to Cloud Logging for free), each with an event name and a few fields: `room_created`, `player_joined`, `game_started`, `game_finished`, `ws_connected`, `ws_closed` (with close code), `snapshot_conflict`, `rate_limited`. No player names or drawing content in logs. This makes the later observability work (see the v1 backlog) a configuration job, not a rewrite.
 - Tests using FastAPI's test client WebSocket support: a scripted 3-player game from lobby through reveal and finish, reconnect mid-round, reconnect during the reveal lands on the current page, a non-host `reveal_next` is rejected, invalid message rejected, oversize payload rejected, skip-player, disallowed origin rejected.
 
-**Review checklist:** a full game can be played with only a test script (no UI); `game_engine` untouched except for bug fixes (call these out); the dependency direction in section 2 holds.
+**Review checklist:** a full game can be played with only a test script (no UI); `game_engine` untouched except for bug fixes (call these out); the dependency direction in section 2 holds, with `api` and `rooms` added to import-linter's `root_packages` and their layers un-parenthesised.
 
 ---
 
@@ -611,7 +613,7 @@ Each is applied (and logged again) in the step it belongs to:
 | Python | **3.15.2** (`.python-version` pins `3.15`, uv fetches the interpreter) |
 | FastAPI 0.165.0 | uvicorn 0.54.0 (`[standard]`), starlette 1.10.0, pydantic 2.14.4 |
 | psycopg | 3.3.9 (`[binary,pool]`), psycopg-pool 3.3.3 |
-| Backend dev | pytest 9.2.0, pytest-asyncio 1.5.0, pytest-cov 7.1.0, ruff 0.17.6, httpx2 2.16.2 |
+| Backend dev | pytest 9.2.0, pytest-asyncio 1.5.0, pytest-cov 7.1.0, ruff 0.17.6, httpx2 2.16.2, import-linter 2.17 (grimp 3.20) |
 | Node | **26.13.1** (Latest LTS "Lithium"), npm 11.20.0 |
 | Frontend | Vite 8.3.6, React 19.3.1, TypeScript 7.0.2, @vitejs/plugin-react 6.1.2 |
 | Frontend dev | vitest 5.1.1, @vitest/coverage-v8 5.1.1, jsdom 31.0.1, Testing Library (react 16.3.3, dom 10.4.2, jest-dom 8.0.0, user-event 14.6.13), oxlint 1.90.0 |
@@ -722,6 +724,9 @@ reviewed apart from the engine that consumes them.
    also bans calls to the global `random` generator, which would quietly make
    games unreplayable. All three rules were probed by introducing the violation
    they catch, so they are known to fail and not merely to pass.
+   *(Superseded during the Step 2b review — see "Step 2b review" below. The
+   layering moved to import-linter and the file became
+   `tests/game_engine/test_package_boundaries.py`.)*
 3. **`WordBank.to_dict`/`from_dict` ship here rather than with the engine.**
    The plan lists serialisation under the engine's `to_dict(game)`. The bank
    owns state the engine cannot reconstruct — which options each player is
@@ -740,3 +745,109 @@ words would leak what someone else chose.
 
 **Verified:** 44 tests pass; `game_engine` coverage 100% (the checklist asks for
 >= 90%); `make lint` and `make test` green.
+
+### Step 2b — game engine (23 Nov 2026)
+
+Second of Step 2's two PRs: the rules that consume the word bank.
+
+**Deviations:**
+
+1. **`host_idx` is derived, not stored.** Section 3's `games` table has a
+   `host_idx` column, so the plan implies storing it. The engine instead marks
+   the host on the `Player` and derives the index. Shuffling seats and removing
+   players would both otherwise have to remember to move a stored number, and
+   forgetting once hands the game to the wrong person. Storage writes the
+   derived value to its column in Step 3.
+2. **"Has this player submitted?" is derived too**, from whether their current
+   book has a page for this round, rather than tracked in a set that is reset
+   each round. Two sources of the same truth can disagree; one cannot.
+3. **`reveal_next` and `reveal_prev` clamp at the ends rather than raising.**
+   The plan does not say. Back is disabled on the first step in the UI and the
+   host is shown "Finish game" on the last, so a message arriving at either end
+   is a double-tap, not a bug worth failing a game over. `finish_reveal` before
+   the last step **is** rejected, because that would cut the game short for
+   everyone.
+4. **The host cannot be removed.** The plan says the host may remove a player
+   but does not say what happens if they remove themselves; the game would be
+   left without a host. Rejected outright. Removing a player mid-game is
+   already a v1 item.
+5. **Player limits live in `game_engine/models.py`** (`MIN_PLAYERS`,
+   `MAX_PLAYERS`, `MAX_NAME_LENGTH`, `MAX_TEXT_LENGTH`) rather than only in
+   `api`, which section 3 lists as the enforcement point. `api` imports them in
+   Step 4. A limit written down twice is a limit that will disagree with itself.
+6. **Only the host can move the reveal pointer, enforced in the engine.**
+   Section 3 describes this as an API rule. Putting it in the engine means it
+   holds for every caller, and the API layer stays a thin translation.
+7. **The dependency-direction rule was narrowed.** As first written in Step 2a
+   it banned every `random.*` call, which flagged `random.Random()` in
+   `snapshots.py` — the one construct that *is* injected randomness. It now
+   allowlists exactly that name, so any other function on the module is still
+   caught. Re-probed with `random.shuffle` to confirm.
+
+**Verified:** 343 tests; **`game_engine` at 100% statement coverage** (the
+checklist asks for >= 90%); `make lint` and `make test` green. The secrecy
+tests were checked by deliberately introducing three leaks — every book's word,
+the whole book history, and a token — and confirming the suite failed each time.
+
+### Step 2b review — package boundaries (23 Nov 2026)
+
+Changes made to the Step 2b branch in review, before merge.
+
+1. **Function-level imports in the tests were hoisted.** Six imports sat
+   inside test functions and helpers, each pulling a symbol from a module the
+   same file already imported at the top (`conftest.py` imported
+   `game_engine.game` two lines above a helper that re-imported it). None of
+   the reasons to defer an import applied: tests are leaves of the import
+   graph, so there was no cycle to break, and nothing was optional or
+   expensive. Deferring them hid the module's dependency surface from ruff's
+   unused-import rule and turned a renamed engine symbol into one failing test
+   at run time instead of a collection error naming every affected file.
+
+2. **The layering moved to import-linter; the custom test kept only what a
+   linter cannot express.** Step 2a's test had two weaknesses. Both of its
+   rules were denylists, so each caught only the modules somebody had thought
+   to name — `IO_MODULES` banned `time` but not `datetime`, so a clock could
+   sit in the rules under a green purity check, and `SIBLING_PACKAGES` was
+   hardcoded, so a package added in a later step would silently stop being
+   guarded against. And it read one file at a time, so it could never see an
+   indirect chain (`api -> rooms -> api`), which is how layering actually
+   breaks. Split by what each tool is good at:
+   - **import-linter** (configured in `backend/pyproject.toml`, run by `make
+     backend-lint`) owns the layering. It reads the real import graph and
+     follows indirect chains.
+   - **`tests/game_engine/test_package_boundaries.py`** owns the two rules no
+     import linter can express: an **allowlist** of what `game_engine` may
+     import, which subsumes both old denylists and has no holes to forget, and
+     the ban on the global `random` generator, which is a rule about a *call*,
+     not an import. Step 2b deviation 7's `random.Random` allowance is carried
+     over unchanged.
+
+3. **The layers contract is written for the finished architecture.**
+   `api`, `rooms` and `storage` do not exist yet, so they appear in parentheses
+   — import-linter tolerates a missing optional layer — and each starts being
+   enforced in the step that creates it, rather than needing someone to
+   remember to add it then. `root_packages` cannot name a package that does not
+   exist, and a package missing from it is simply absent from the graph, so its
+   contracts pass by having nothing to check. A third test compares
+   `root_packages` against the packages on disk so the two cannot drift apart.
+
+**Not done:** import-linter checks nothing today beyond what the allowlist
+already does, because `game_engine` is the only package that exists and it sits
+at the bottom of the order. It is set up now so that Step 4 is not the step
+that both builds the API and invents its own guardrails.
+
+**Verified:** 336 tests (the two parametrised denylists, 16 tests, became one
+parametrised allowlist plus the drift guard, 9); `game_engine` still at 100%
+statement coverage; `make lint` and `make test` green. All four guards were
+probed by introducing the violation they catch — `import datetime` (the hole
+the old denylist had), `random.shuffle`, a package left out of
+`root_packages`, and `game_engine` importing a sibling — and each failed as
+intended.
+
+4. **The plan itself was amended, not just the log.** Section 2 now records
+   *how* the dependency direction is enforced, and the review checklists for
+   Steps 3 and 4 require each new package to be added to import-linter's
+   `root_packages` with its layer un-parenthesised. Without that, a step could
+   add `rooms/` and leave the layering silently unchecked for it. The drift
+   test fails in that case, so the plan now says what the fix is rather than
+   leaving the next session to work it out from a failing assertion.
