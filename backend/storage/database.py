@@ -15,6 +15,7 @@ import asyncio
 import os
 import secrets
 from collections.abc import Sequence
+from datetime import timedelta
 from typing import Any, NamedTuple, Self
 
 import psycopg
@@ -376,3 +377,25 @@ class Database:
             pages = [PageRow(**row) for row in await cursor.fetchall()]
 
         return FinishedGame(**game, players=players, books=books, pages=pages)
+
+    # -- housekeeping -----------------------------------------------------
+
+    async def delete_stale_games(self, older_than: timedelta) -> int:
+        """Delete abandoned games, and return how many went.
+
+        A game nobody has touched in a day is one nobody is coming back to:
+        the players have closed their tabs and the room is holding a four
+        letter code hostage. Finished games are never deleted -- they are the
+        whole reason the rows are written (BUILD_PLAN.md, Step 5).
+
+        The cutoff is computed by Postgres from `now()` rather than by Python,
+        so there is one clock involved instead of two, and a test can age a row
+        precisely by writing `updated_at`.
+        """
+        async with self._pool.connection() as conn:
+            cursor = await conn.execute(
+                "DELETE FROM games WHERE status <> %s AND updated_at < now() - %s",
+                (GameStatus.FINISHED, older_than),
+            )
+
+        return cursor.rowcount
