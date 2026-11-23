@@ -9,7 +9,14 @@ import re
 
 import pytest
 
-from game_engine.game import pick_word, reveal_next, shuffle_words
+from game_engine.game import (
+    finish_reveal,
+    is_last_step,
+    pick_word,
+    reveal_next,
+    shuffle_words,
+    submit,
+)
 from game_engine.models import Phase
 from game_engine.rotation import book_index
 from game_engine.views import view_for
@@ -147,8 +154,6 @@ def test_the_lobby_view_has_no_round_or_reveal_data() -> None:
 def test_the_round_view_reports_who_has_finished() -> None:
     game = started(3)
     pick_word(game, 1, "kite")
-    from game_engine.game import submit
-
     submit(game, 1, strokes={"v": 1, "w": 800, "h": 600, "ops": []})
 
     view = view_for(game, 0)
@@ -214,8 +219,6 @@ def test_the_reveal_view_drops_the_round_fields() -> None:
 
 
 def test_the_done_view_is_just_the_players() -> None:
-    from game_engine.game import finish_reveal, is_last_step
-
     game = play_to_reveal(3)
     while not is_last_step(game):
         reveal_next(game, game.host_idx)

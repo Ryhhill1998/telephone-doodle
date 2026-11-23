@@ -15,6 +15,7 @@ from game_engine.game import (
     is_last_step,
     pick_word,
     reveal_next,
+    skip_player,
     submit,
 )
 from game_engine.models import Phase
@@ -155,8 +156,6 @@ def test_submitted_pages_survive_with_their_content() -> None:
 
 
 def test_a_skipped_page_stays_marked_as_skipped() -> None:
-    from game_engine.game import skip_player
-
     game = started(3)
     skip_player(game, 1)
 
