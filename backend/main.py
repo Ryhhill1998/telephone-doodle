@@ -1,43 +1,59 @@
 """Telephone Doodle API.
 
-The FastAPI application. HTTP routes and the WebSocket handler move into `api/`
-from Step 4 onward; for now this module exposes the health check and owns the
-database for the lifetime of the process.
+The FastAPI application: the health check, the database and `RoomManager` for
+the lifetime of the process, and the `api` router (HTTP routes and the
+WebSocket handler, Step 4).
 """
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from api import router
+from rooms import RoomManager
+from settings import Settings
 from storage import Database
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Open the database on startup, close it on shutdown.
+    """Open the database and start the room manager on startup; reverse on shutdown.
 
     The schema is created here because this is the only moment the plan gives
     it: there is no migration step and no deploy hook, just an idempotent
     `CREATE TABLE IF NOT EXISTS` on every boot (BUILD_PLAN.md, Step 3).
 
     Connecting before the app serves anything means a wrong `DATABASE_URL`
-    fails the deploy rather than the first game. The pool is parked on
-    `app.state` so Step 4's `RoomManager` can be handed it instead of reaching
-    for a global.
+    fails the deploy rather than the first game. Both are parked on
+    `app.state` so `api`'s routes can reach them instead of a global.
     """
     database = Database.from_env()
     await database.connect()
     await database.create_schema()
     app.state.db = database
+    app.state.settings = Settings.from_env()
+
+    rooms = RoomManager(database)
+    await rooms.start()
+    app.state.rooms = rooms
 
     try:
         yield
     finally:
+        await rooms.stop()
         await database.close()
 
 
 app = FastAPI(title="Telephone Doodle API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=Settings.from_env().cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(router)
 
 
 @app.get("/healthz")
