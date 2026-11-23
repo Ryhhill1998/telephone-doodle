@@ -80,6 +80,23 @@ def test_words_cannot_be_shuffled_after_choosing() -> None:
         shuffle_words(game, 0)
 
 
+def test_a_word_cannot_be_changed_once_the_drawing_is_in() -> None:
+    game = started(3)
+    pick_word(game, 0, "castle")
+    draw(game, 0)
+
+    with pytest.raises(NotAllowed):
+        pick_word(game, 0, "second thoughts")
+
+
+def test_an_over_long_guess_is_rejected() -> None:
+    game = started(3)
+    play_round(game)
+
+    with pytest.raises(InvalidSubmission):
+        submit(game, 0, text="x" * 101)
+
+
 def test_words_are_only_picked_in_the_first_round() -> None:
     game = started(3)
     play_round(game)

@@ -83,7 +83,13 @@ def test_game_engine_does_not_import_io(path: Path) -> None:
 
 
 def test_randomness_is_injected_never_global() -> None:
-    """`random.shuffle` uses a shared global generator, so a game could not be replayed."""
+    """`random.shuffle` and friends share one global generator.
+
+    A module reaching for those could not be replayed from a seed, so they are
+    banned. `random.Random` is the exception and the point: constructing a
+    dedicated generator is what injected randomness means. Allowlisting exactly
+    one name means any other function added to `random` is caught by default.
+    """
     for path in source_files():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
@@ -92,6 +98,7 @@ def test_randomness_is_injected_never_global() -> None:
                 and isinstance(node.func, ast.Attribute)
                 and isinstance(node.func.value, ast.Name)
                 and node.func.value.id == "random"
+                and node.func.attr != "Random"
             ):
                 pytest.fail(
                     f"{path.name} calls random.{node.func.attr}() on the global generator; "

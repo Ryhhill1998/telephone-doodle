@@ -183,3 +183,11 @@ def test_a_game_cannot_be_started_twice() -> None:
 
     with pytest.raises(WrongPhase):
         start(game, random.Random(0))
+
+
+def test_a_game_with_no_players_has_no_host() -> None:
+    """Defensive: host_idx says so loudly rather than returning seat 0."""
+    game = new_game("g1", "KQFM")
+
+    with pytest.raises(LookupError):
+        _ = game.host_idx

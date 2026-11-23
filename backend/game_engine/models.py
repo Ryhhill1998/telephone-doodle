@@ -137,8 +137,5 @@ class Game:
         """N players means N books and N rounds."""
         return len(self.books) or len(self.players)
 
-    def player(self, idx: int) -> Player:
-        return self.players[idx]
-
     def player_by_token(self, token: str) -> Player | None:
         return next((p for p in self.players if p.token == token), None)
