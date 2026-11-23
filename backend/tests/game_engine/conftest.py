@@ -54,3 +54,24 @@ def play_to_reveal(player_count: int = 3, seed: int = 7) -> Game:
     for _ in range(player_count):
         play_round(game)
     return game
+
+
+def tagged_round(game: Game) -> None:
+    """Play a round where every page carries a tag identifying who wrote it.
+
+    Lets a test assert exactly which pages ended up in a player's view.
+    """
+    from game_engine.game import advance_round, pick_word, submit
+    from game_engine.models import PageKind
+    from game_engine.rotation import page_kind
+
+    kind = page_kind(game.round)
+    for seat in range(game.player_count):
+        if game.round == 0:
+            pick_word(game, seat, f"WORD-{seat}")
+        tag = f"PAGE-{seat}-R{game.round}"
+        if kind is PageKind.TEXT:
+            submit(game, seat, text=tag)
+        else:
+            submit(game, seat, strokes={"v": 1, "w": 800, "h": 600, "ops": [], "tag": tag})
+    advance_round(game)
