@@ -6,6 +6,8 @@ requires-python = ">=3.15"
 dependencies = [
     "fastapi>=0.165.0",
     "psycopg[binary,pool]>=3.3.9",
+    "pydantic>=2.14",
+    "pydantic-settings>=2.8",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -46,14 +48,14 @@ select = [
 # tests/game_engine/test_package_boundaries.py fails if a package on disk is
 # missing from root_packages, so the two cannot drift apart.
 [tool.importlinter]
-root_packages = ["game_engine", "storage"]
+root_packages = ["api", "game_engine", "rooms", "storage"]
 
 [[tool.importlinter.contracts]]
 name = "Packages are layered, top to bottom"
 type = "layers"
 layers = [
-    "(api)",
-    "(rooms)",
+    "api",
+    "rooms",
     # Siblings on one layer, separated by `:`, are independent: `game_engine`
     # and `storage` may not import each other in either direction. `rooms`
     # sits above both and translates, which is what keeps the rules free of
