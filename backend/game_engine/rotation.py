@@ -2,7 +2,7 @@
 
 The seats form a circle and every book moves on one seat per round, so with N
 players there are N books and N rounds and every player touches every book
-exactly once (BUILD_PLAN.md, section 1).
+exactly once.
 
 These are the only two places the direction of travel is decided, so the
 passing stays predictable from the lobby list.

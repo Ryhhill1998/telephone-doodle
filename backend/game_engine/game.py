@@ -175,7 +175,7 @@ def pick_word(game: Game, seat: int, text: str) -> None:
 
     The word is stored on the book and stays hidden until the reveal. Words the
     player typed are not checked against anyone else's, because such a check
-    would leak what another player chose (BUILD_PLAN.md, section 1).
+    would leak what another player chose.
     """
     _require_phase(game, Phase.ROUND, "pick a word")
     if game.round != 0:
