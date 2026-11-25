@@ -60,6 +60,11 @@ has to be all or nothing — is decided by the database. `DATABASE_URL` points a
 the container above by default; in production it comes from Secret Manager, and
 there is no fallback if it is unset.
 
+A game's state is written to Postgres after every change, so a deploy, a
+restart or Cloud Run scaling to zero costs players a few seconds of
+reconnecting, not the game in progress. A finished game's snapshot — and the
+player tokens in it — is deleted as soon as the game ends.
+
 ## Contributing
 
 One step, one branch, one pull request. `main` requires a reviewed PR.

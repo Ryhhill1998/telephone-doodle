@@ -11,10 +11,12 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
+import psycopg
 import pytest
 
-from game_engine import NotAllowed
-from rooms import RoomManager, RoomNotFound
+import game_engine
+from game_engine import NotAllowed, PageKind, Phase, Player, page_kind
+from rooms import Room, RoomGone, RoomManager, RoomNotFound
 from storage import Database
 
 
@@ -143,3 +145,148 @@ async def test_evict_stale_rooms_leaves_active_rooms_alone(db: Database) -> None
 
     assert evicted == []
     assert manager.get_room(room.game.code) is room
+
+
+# -- durability (BUILD_PLAN.md, Step 5) -----------------------------------
+
+
+async def _play_round(manager: RoomManager, room: Room, players: list[Player]) -> None:
+    """Every seat picks a word (round 0 only) and submits a page."""
+    kind = page_kind(room.game.round)
+    for player in players:
+        if room.game.round == 0:
+            assert room.game.bank is not None
+            option = room.game.bank.options_for(player.idx)[0]
+            await manager.pick_word(room, player, text=option)
+        if kind is PageKind.TEXT:
+            await manager.submit_page(room, player, text=f"guess-{player.idx}", strokes=None)
+        else:
+            strokes = {"v": 1, "w": 800, "h": 600, "ops": []}
+            await manager.submit_page(room, player, text=None, strokes=strokes)
+
+
+async def _finish_the_reveal(manager: RoomManager, room: Room, host: Player) -> None:
+    while not game_engine.is_last_step(room.game):
+        await manager.reveal_next(room, host)
+    await manager.finish_reveal(room, host)
+
+
+async def test_room_survives_discarding_the_manager_and_reloads_on_reconnect(
+    db: Database,
+) -> None:
+    """A process restart mid-round costs a reconnect, not the game."""
+    manager = RoomManager(db)
+    room, host, host_token = await manager.create_room("Jo")
+    code = room.game.code
+    _, p1, p1_token = await manager.join_room(code, "Sam")
+    _, p2, p2_token = await manager.join_room(code, "Ali")
+
+    await manager.start_game(room, host)
+    await _play_round(manager, room, [host, p1, p2])
+    assert room.game.round == 1
+
+    reloaded_manager = RoomManager(db)  # stands in for a brand-new process
+
+    reloaded_room, reloaded_host = await reloaded_manager.authenticate(code, host_token)
+    assert reloaded_room.game.round == 1
+    assert all(not seated.connected for seated in reloaded_room.game.players)
+
+    _, reloaded_p1 = await reloaded_manager.authenticate(code, p1_token)
+    _, reloaded_p2 = await reloaded_manager.authenticate(code, p2_token)
+    players = [reloaded_host, reloaded_p1, reloaded_p2]
+
+    await _play_round(reloaded_manager, reloaded_room, players)
+    await _play_round(reloaded_manager, reloaded_room, players)
+    assert reloaded_room.game.phase is Phase.REVEAL
+
+    await _finish_the_reveal(reloaded_manager, reloaded_room, reloaded_host)
+
+    assert reloaded_room.game.phase is Phase.DONE
+    finished = await db.get_finished_game(reloaded_room.game.id)
+    assert finished is not None
+
+
+async def test_room_survives_discarding_the_manager_during_the_reveal(db: Database) -> None:
+    """The shared reveal pointer is part of the snapshot, so it picks up where
+    it was left, not back at the first book (BUILD_PLAN.md, Step 5).
+    """
+    manager = RoomManager(db)
+    room, host, host_token = await manager.create_room("Jo")
+    code = room.game.code
+    _, p1, _ = await manager.join_room(code, "Sam")
+    _, p2, _ = await manager.join_room(code, "Ali")
+
+    await manager.start_game(room, host)
+    for _ in range(3):
+        await _play_round(manager, room, [host, p1, p2])
+    assert room.game.phase is Phase.REVEAL
+
+    await manager.reveal_next(room, host)
+    await manager.reveal_next(room, host)
+    moved_to = room.game.reveal
+
+    reloaded_manager = RoomManager(db)
+    reloaded_room, reloaded_host = await reloaded_manager.authenticate(code, host_token)
+
+    assert reloaded_room.game.reveal == moved_to
+
+    await _finish_the_reveal(reloaded_manager, reloaded_room, reloaded_host)
+    assert reloaded_room.game.phase is Phase.DONE
+
+
+async def test_get_or_load_refuses_a_stale_room(
+    db: Database, conn: psycopg.AsyncConnection
+) -> None:
+    """A code nobody has touched in 24h is gone, not reloadable."""
+    manager = RoomManager(db, inactivity_timeout=timedelta(seconds=-1))
+    room, _host, _ = await manager.create_room("Jo")
+    await manager.join_room(room.game.code, "Sam")  # a snapshot to (not) load
+    code = room.game.code
+    await manager.evict_stale_rooms()  # drop it from memory, as a restart would
+
+    await conn.execute(
+        "UPDATE games SET updated_at = now() - interval '25 hours' WHERE code = %s", (code,)
+    )
+
+    with pytest.raises(RoomNotFound):
+        await manager.get_or_load(code)
+
+
+async def test_losing_a_version_race_drops_the_room_and_closes_its_sockets(
+    db: Database,
+) -> None:
+    """Two instances briefly holding the same room during a deploy: the one
+    with the stale version loses, drops the room, and closes its sockets.
+    """
+    manager_a = RoomManager(db)
+    room_a, host, host_token = await manager_a.create_room("Jo")
+    code = room_a.game.code
+    await manager_a.join_room(code, "Sam")  # version 0 -> 1: a snapshot exists
+
+    manager_b = RoomManager(db)
+    room_b, host_b = await manager_b.authenticate(code, host_token)
+    guest_ws = FakeWebSocket()
+    await manager_b.connect(room_b, host_b, guest_ws)
+
+    await manager_a.shuffle_seats(room_a, host)  # version 1 -> 2, from elsewhere
+
+    with pytest.raises(RoomGone):
+        await manager_b.kick_player(room_b, host_b, seat=1)
+
+    assert guest_ws.closed == 1012
+    with pytest.raises(RoomNotFound):
+        manager_b.get_room(code)
+
+
+async def test_close_all_rooms_closes_every_socket_with_1012(db: Database) -> None:
+    """The SIGTERM path (`main.py`'s lifespan shutdown)."""
+    manager = RoomManager(db)
+    room, host, _ = await manager.create_room("Jo")
+    host_ws = FakeWebSocket()
+    await manager.connect(room, host, host_ws)
+
+    await manager.close_all_rooms()
+
+    assert host_ws.closed == 1012
+    with pytest.raises(RoomNotFound):
+        manager.get_room(room.game.code)

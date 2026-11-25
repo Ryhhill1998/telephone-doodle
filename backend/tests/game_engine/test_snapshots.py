@@ -97,6 +97,22 @@ def test_the_host_survives_a_reload() -> None:
     assert restored.players[restored.host_idx].token == host_token
 
 
+def test_snapshot_size_for_a_full_ten_player_game() -> None:
+    """How big `games.snapshot` gets for the biggest lobby v0 allows.
+
+    Uses realistic drawings (the same small fixture every other test does),
+    not the 200 KB-per-message cap a single stroke payload is separately held
+    to (BUILD_PLAN.md, section 3) -- that bounds one player's one submission,
+    not what a whole game's worth of them adds up to, which is what this
+    reports (Step 5's review checklist).
+    """
+    game = play_to_reveal(10)
+
+    size = len(json.dumps(to_dict(game)).encode())
+
+    assert size < 50_000, f"a full 10-player game's snapshot was {size} bytes"
+
+
 def test_the_reveal_pointer_survives_a_reload() -> None:
     """A player refreshing mid-reveal must land on the page everyone else is on."""
     game = play_to_reveal(4)
