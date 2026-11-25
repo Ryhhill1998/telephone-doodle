@@ -1,8 +1,8 @@
 /**
  * Placeholder shell.
  *
- * Routing, the design tokens from BUILD_PLAN.md §4 and the real screens arrive
- * in Step 8, once the UI design has been approved.
+ * Routing, the design tokens and the real screens arrive in Step 8, once the
+ * UI design has been approved.
  */
 export default function App() {
   return (
