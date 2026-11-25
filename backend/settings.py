@@ -1,23 +1,23 @@
 """Environment-based configuration.
 
 One place for the handful of values that differ between dev and production
-(BUILD_PLAN.md, section 2's repo layout). Everything is read from the
-environment and nothing is guessed: there is no default list of origins,
-because a wrong guess there would either lock out the real frontend or open
-the API to every site on the internet.
+(BUILD_PLAN.md, section 2's repo layout). `pydantic-settings` reads everything
+from the environment; there is no default list of origins, because a wrong
+guess there would either lock out the real frontend or open the API to every
+site on the internet.
 """
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass
-from typing import Self
+from typing import Annotated, Self
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode
 
 __all__ = ["Settings"]
 
 
-@dataclass(frozen=True)
-class Settings:
+class Settings(BaseSettings):
     """`ALLOWED_ORIGINS` and nothing else, for now.
 
     `None` means "unset" -- permissive, for local dev where the frontend talks
@@ -25,15 +25,22 @@ class Settings:
     to check. Production always sets it, so a dev-only default never ships.
     """
 
-    allowed_origins: tuple[str, ...] | None
+    allowed_origins: Annotated[tuple[str, ...] | None, NoDecode] = None
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: str | tuple[str, ...] | None) -> tuple[str, ...] | None:
+        """`ALLOWED_ORIGINS` is a comma-separated string, not JSON, so the
+        default env decoding (which expects JSON for non-primitive types) is
+        skipped via `NoDecode` and the splitting done here instead."""
+        if value is None or isinstance(value, tuple):
+            return value
+        origins = tuple(origin.strip() for origin in value.split(",") if origin.strip())
+        return origins or None
 
     @classmethod
     def from_env(cls) -> Self:
-        raw = os.environ.get("ALLOWED_ORIGINS")
-        if raw is None:
-            return cls(allowed_origins=None)
-        origins = tuple(origin.strip() for origin in raw.split(",") if origin.strip())
-        return cls(allowed_origins=origins)
+        return cls()
 
     def allows_origin(self, origin: str | None) -> bool:
         """Whether a WebSocket's `Origin` header may connect.
