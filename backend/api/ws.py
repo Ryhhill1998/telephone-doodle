@@ -9,7 +9,9 @@ the socket, because those mean there is no legitimate conversation to have.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from api.schemas import (
@@ -28,6 +30,7 @@ from api.schemas import (
 )
 from rooms import GameError, InvalidToken, Player, Room, RoomManager, RoomNotFound
 from rooms.events import log_event
+from settings import Settings, get_settings
 
 router = APIRouter()
 
@@ -41,10 +44,26 @@ CLOSE_ROOM_NOT_FOUND = 4404
 CLOSE_INVALID_TOKEN = 4401
 
 
+def _origin_allowed(settings: Settings, origin: str | None) -> bool:
+    """Whether a WebSocket's `Origin` header may connect.
+
+    CORS protects browsers reading HTTP responses and is handled by
+    `CORSMiddleware`; WebSocket upgrades are not covered by CORS at all, so
+    the server has to check this itself (BUILD_PLAN.md, section 3).
+    """
+    if settings.allowed_origins is None:
+        return True
+    return origin is not None and origin in settings.allowed_origins
+
+
 @router.websocket("/ws/{code}")
-async def room_socket(websocket: WebSocket, code: str, token: str) -> None:
-    settings = websocket.app.state.settings
-    if not settings.allows_origin(websocket.headers.get("origin")):
+async def room_socket(
+    websocket: WebSocket,
+    code: str,
+    token: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    if not _origin_allowed(settings, websocket.headers.get("origin")):
         await websocket.close(code=CLOSE_FORBIDDEN_ORIGIN)
         return
 

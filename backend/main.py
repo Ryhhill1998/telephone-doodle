@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api import router
 from rooms import RoomManager
-from settings import Settings
+from settings import get_settings
 from storage import Database
 
 
@@ -26,14 +26,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     `CREATE TABLE IF NOT EXISTS` on every boot (BUILD_PLAN.md, Step 3).
 
     Connecting before the app serves anything means a wrong `DATABASE_URL`
-    fails the deploy rather than the first game. Both are parked on
-    `app.state` so `api`'s routes can reach them instead of a global.
+    fails the deploy rather than the first game. It's parked on `app.state`
+    so `api`'s routes can reach it instead of a global.
     """
     database = Database.from_env()
     await database.connect()
     await database.create_schema()
     app.state.db = database
-    app.state.settings = Settings.from_env()
 
     rooms = RoomManager(database)
     await rooms.start()
@@ -49,7 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Telephone Doodle API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=Settings.from_env().cors_origins,
+    allow_origins=get_settings().cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -9,12 +9,13 @@ site on the internet.
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from functools import lru_cache
+from typing import Annotated
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode
 
-__all__ = ["Settings"]
+__all__ = ["Settings", "get_settings"]
 
 
 class Settings(BaseSettings):
@@ -38,22 +39,19 @@ class Settings(BaseSettings):
         origins = tuple(origin.strip() for origin in value.split(",") if origin.strip())
         return origins or None
 
-    @classmethod
-    def from_env(cls) -> Self:
-        return cls()
-
-    def allows_origin(self, origin: str | None) -> bool:
-        """Whether a WebSocket's `Origin` header may connect.
-
-        CORS protects browsers reading HTTP responses and is handled by
-        `CORSMiddleware`; WebSocket upgrades are not covered by CORS at all, so
-        the server has to check this itself (BUILD_PLAN.md, section 3).
-        """
-        if self.allowed_origins is None:
-            return True
-        return origin is not None and origin in self.allowed_origins
-
     @property
     def cors_origins(self) -> list[str]:
         """What to hand `CORSMiddleware`: the list, or `"*"` when unset."""
         return ["*"] if self.allowed_origins is None else list(self.allowed_origins)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """The app's one `Settings` instance (FastAPI's standard settings pattern:
+    https://fastapi.tiangolo.com/advanced/settings/#creating-the-settings-only-once-with-lru_cache).
+
+    `pydantic-settings` builds it straight from the environment, so `lru_cache`
+    is the only reason this is a function and not just `Settings()` at every
+    call site -- one instance, built once, reused by `Depends(get_settings)`.
+    """
+    return Settings()
