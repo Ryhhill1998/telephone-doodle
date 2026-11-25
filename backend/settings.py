@@ -26,17 +26,17 @@ class Settings(BaseSettings):
     to check. Production always sets it, so a dev-only default never ships.
     """
 
-    allowed_origins: Annotated[tuple[str, ...] | None, NoDecode] = None
+    allowed_origins: Annotated[frozenset[str] | None, NoDecode] = None
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
-    def _split_origins(cls, value: str | tuple[str, ...] | None) -> tuple[str, ...] | None:
+    def _split_origins(cls, value: str | frozenset[str] | None) -> frozenset[str] | None:
         """`ALLOWED_ORIGINS` is a comma-separated string, not JSON, so the
         default env decoding (which expects JSON for non-primitive types) is
         skipped via `NoDecode` and the splitting done here instead."""
-        if value is None or isinstance(value, tuple):
+        if value is None or isinstance(value, frozenset):
             return value
-        origins = tuple(origin.strip() for origin in value.split(",") if origin.strip())
+        origins = frozenset(origin.strip() for origin in value.split(",") if origin.strip())
         return origins or None
 
     @property
