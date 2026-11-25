@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from main import app
+from settings import Settings, get_settings
 
 STROKES = {"v": 1, "w": 100, "h": 100, "ops": []}
 
@@ -235,19 +236,27 @@ def test_oversize_payload_is_rejected() -> None:
             assert error["type"] == "error"
 
 
-def test_disallowed_origin_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ALLOWED_ORIGINS", "https://good.example")
+def test_disallowed_origin_is_rejected() -> None:
+    """`get_settings` is `lru_cache`d, so `monkeypatch.setenv` after the first
+    call is a no-op; FastAPI's documented fix is overriding the dependency
+    itself (https://fastapi.tiangolo.com/advanced/settings/#settings-in-another-module)."""
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        allowed_origins=frozenset({"https://good.example"})
+    )
 
-    with TestClient(app) as client:
-        code, tokens = _setup_three_players(client)
+    try:
+        with TestClient(app) as client:
+            code, tokens = _setup_three_players(client)
 
-        with (
-            pytest.raises(WebSocketDisconnect) as exc_info,
-            client.websocket_connect(
-                f"/ws/{code}?token={tokens[0]}",
-                headers={"origin": "https://evil.example"},
-            ),
-        ):
-            pass
+            with (
+                pytest.raises(WebSocketDisconnect) as exc_info,
+                client.websocket_connect(
+                    f"/ws/{code}?token={tokens[0]}",
+                    headers={"origin": "https://evil.example"},
+                ),
+            ):
+                pass
 
-    assert exc_info.value.code == 4403
+        assert exc_info.value.code == 4403
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
