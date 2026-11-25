@@ -47,6 +47,12 @@ MAX_POOL_SIZE = 10
 #: unguessable enough that a future permalink feature is not born broken.
 GAME_ID_BYTES = 6
 
+#: `load_game`'s default freshness window (BUILD_PLAN.md, Step 5): a code
+#: nobody has touched in this long is one `RoomManager.get_or_load` should
+#: treat as gone rather than resurrect, the same cutoff `delete_stale_games`
+#: uses to remove the row entirely.
+DEFAULT_LOAD_MAX_AGE = timedelta(hours=24)
+
 
 class RoomCodeTaken(Exception):
     """A game that is still being played already holds this room code.
@@ -185,22 +191,29 @@ class Database:
 
         return game_id
 
-    async def load_game(self, code: str) -> ActiveGame | None:
+    async def load_game(
+        self, code: str, *, max_age: timedelta = DEFAULT_LOAD_MAX_AGE
+    ) -> ActiveGame | None:
         """The unfinished game holding this code, if there is one.
 
         Finished games are excluded rather than merely ordered last: their
         codes are free to be reused, so a code can match both an old finished
         game and the one being played right now. The partial unique index
         guarantees at most one of the latter.
+
+        `max_age` mirrors `delete_stale_games`'s cutoff: a code nobody has
+        touched in that long is treated as gone even if the row has not been
+        swept yet, so `RoomManager.get_or_load` never resurrects an abandoned
+        game (BUILD_PLAN.md, Step 5).
         """
         async with self._pool.connection() as conn:
             cursor = await conn.execute(
                 """
                 SELECT id, version, snapshot
                   FROM games
-                 WHERE code = %s AND status <> %s
+                 WHERE code = %s AND status <> %s AND updated_at > now() - %s
                 """,
-                (code, GameStatus.FINISHED),
+                (code, GameStatus.FINISHED, max_age),
             )
             row = await cursor.fetchone()
 
