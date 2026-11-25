@@ -9,7 +9,7 @@ models and the plain rows `storage` deals in. `api` never touches
 
 from game_engine import GameError, NotAllowed, Player, WrongPhase
 from rooms.codes import ALPHABET, CODE_LENGTH, generate_code
-from rooms.errors import InvalidToken, RoomError, RoomNotFound
+from rooms.errors import InvalidToken, RoomError, RoomGone, RoomNotFound
 from rooms.manager import Room, RoomManager
 
 __all__ = [
@@ -21,6 +21,7 @@ __all__ = [
     "Player",
     "Room",
     "RoomError",
+    "RoomGone",
     "RoomManager",
     "RoomNotFound",
     "WrongPhase",

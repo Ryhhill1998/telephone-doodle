@@ -20,12 +20,14 @@ __all__ = ["Event", "log_event"]
 
 Event = Literal[
     "room_created",
+    "room_loaded",
     "player_joined",
     "game_started",
     "game_finished",
     "ws_connected",
     "ws_closed",
     "snapshot_conflict",
+    "stale_games_deleted",
     "rate_limited",
 ]
 

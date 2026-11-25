@@ -28,6 +28,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Connecting before the app serves anything means a wrong `DATABASE_URL`
     fails the deploy rather than the first game. It's parked on `app.state`
     so `api`'s routes can reach it instead of a global.
+
+    On SIGTERM, uvicorn runs this `finally` block as the ASGI shutdown event:
+    every snapshot write already happened synchronously as part of the event
+    that caused it, so closing every open socket with 1012 is all that is
+    left to do before this instance goes away (BUILD_PLAN.md, Step 5).
     """
     database = Database.from_env()
     await database.connect()
@@ -42,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         await rooms.stop()
+        await rooms.close_all_rooms()
         await database.close()
 
 

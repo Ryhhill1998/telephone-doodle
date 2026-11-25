@@ -28,7 +28,7 @@ from api.schemas import (
     StartMessage,
     SubmitPageMessage,
 )
-from rooms import GameError, InvalidToken, Player, Room, RoomManager, RoomNotFound
+from rooms import GameError, InvalidToken, Player, Room, RoomGone, RoomManager, RoomNotFound
 from rooms.events import log_event
 from settings import Settings, get_settings
 
@@ -69,7 +69,7 @@ async def room_socket(
 
     rooms: RoomManager = websocket.app.state.rooms
     try:
-        room, player = rooms.authenticate(code.upper(), token)
+        room, player = await rooms.authenticate(code.upper(), token)
     except RoomNotFound:
         await websocket.close(code=CLOSE_ROOM_NOT_FOUND)
         return
@@ -98,6 +98,11 @@ async def room_socket(
                 await _dispatch(rooms, room, player, message)
             except GameError as exc:
                 await _send_error(websocket, str(exc))
+            except RoomGone:
+                # Another instance won the version race; this instance has
+                # already dropped the room and closed every socket in it,
+                # this one included, so there is nothing left to receive.
+                break
     except WebSocketDisconnect as exc:
         await rooms.disconnect(room, player)
         log_event("ws_closed", code=room.game.code, seat=player.idx, close_code=exc.code)
