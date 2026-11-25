@@ -1,6 +1,5 @@
 # CI runs only the jobs for the parts of the repo a pull request actually changed,
-# and every job calls a `make` target rather than repeating its flags here
-# (BUILD_PLAN.md, §0 rules 11 and 1).
+# and every job calls a `make` target rather than repeating its flags here.
 #
 # `ci-ok` is the ONLY required status check on main. It passes when every job that
 # ran passed, and treats skipped jobs as fine, so a PR touching one area is never

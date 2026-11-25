@@ -14,8 +14,9 @@ is revealed page by page — usually to considerable confusion.
 **In development — nothing is deployed yet.**
 
 The full specification, the locked technical decisions and the step-by-step build
-plan all live in [`BUILD_PLAN.md`](./BUILD_PLAN.md). That file is the source of
-truth; this README will be rewritten properly in the final step.
+plan all live in [`docs/plan/`](./docs/plan/) and [`docs/steps/`](./docs/steps/).
+Those are the source of truth; this README will be rewritten properly in the
+final step.
 
 ## Planned stack
 

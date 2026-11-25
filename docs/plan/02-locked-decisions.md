@@ -54,7 +54,7 @@ infrastructure/
 docker-compose.dev.yml   local Postgres for development and tests
 .github/workflows/   ci.yml, deploy-api.yml, deploy-frontend.yml
 Makefile             dev, test, lint targets
-BUILD_PLAN.md, README.md
+docs/, README.md
 ```
 
 Run the backend from `backend/` with `uv run uvicorn main:app`. Imports are plain top-level package names (`from game_engine import ...`, `from storage import ...`).

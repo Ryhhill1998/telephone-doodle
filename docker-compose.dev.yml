@@ -1,4 +1,4 @@
-# Local Postgres for development and tests. Production uses Neon (BUILD_PLAN.md §2),
+# Local Postgres for development and tests. Production uses Neon,
 # so nothing here is deployed; `make db` starts it and `make db-stop` stops it.
 services:
   db:
@@ -6,7 +6,7 @@ services:
     container_name: telephone-doodle-db
     environment:
       # Development-only credentials. Never used outside localhost, and the real
-      # connection string lives in Secret Manager (BUILD_PLAN.md §5, Step 15).
+      # connection string lives in Secret Manager (Step 15).
       POSTGRES_USER: doodle
       POSTGRES_PASSWORD: doodle
       POSTGRES_DB: doodle
