@@ -57,8 +57,8 @@ class PageRow:
 class FinishedGame:
     """A whole finished game, read back.
 
-    Nothing in v0 serves this: there is no archive page and no permalink
-    (BUILD_PLAN.md, section 1). It exists so the tests can prove the write
+    Nothing in v0 serves this: there is no archive page and no permalink.
+    It exists so the tests can prove the write
     kept everything, and because the v1 features the rows are being stored for
     will need exactly this.
     """

@@ -1,7 +1,6 @@
 """The database schema, created idempotently on startup.
 
-There is no ORM and no migration tool (BUILD_PLAN.md, section 2 and Step 3's
-review checklist). v0 has four tables and one index; a migration framework
+There is no ORM and no migration tool. v0 has four tables and one index; a migration framework
 would be more machinery than the thing it manages. When a column does need to
 change, the statements here are edited and an `ALTER TABLE ... IF EXISTS` is
 added alongside.
@@ -61,8 +60,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS games_active_code_idx  -- = ACTIVE_CODE_INDEX
     WHERE status <> 'finished';
 
 -- `players`, `books` and `pages` are written once, when the game finishes, so
--- that a finished game records who drew or wrote what (BUILD_PLAN.md, §3).
--- While a game is in progress all of that lives in `games.snapshot` instead.
+-- that a finished game records who drew or wrote what. While a game is in
+-- progress all of that lives in `games.snapshot` instead.
 CREATE TABLE IF NOT EXISTS players (
     game_id TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
     idx     INT  NOT NULL,

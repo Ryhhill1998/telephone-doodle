@@ -1,7 +1,7 @@
 """The connection pool, and the statements the application runs through it.
 
 Plain SQL over `psycopg` 3's async pool. No ORM: the whole schema is four
-tables and the queries are short enough to read (BUILD_PLAN.md, Step 3).
+tables and the queries are short enough to read.
 
 `Database` is an object rather than a module of functions over a global pool.
 Call sites read the same either way (`storage.create_game(...)`), but an
@@ -31,7 +31,7 @@ __all__ = ["ActiveGame", "Database", "RoomCodeTaken"]
 #: Neon's free-plan compute suspends after five minutes idle and takes about a
 #: second to wake, so the first connection after a quiet spell is slow but not
 #: broken. A generous timeout and a couple of retries ride that out instead of
-#: failing a deploy (BUILD_PLAN.md, section 3, "Connection notes for Neon").
+#: failing a deploy.
 CONNECT_TIMEOUT_SECONDS = 10.0
 CONNECT_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 1.0
@@ -47,10 +47,10 @@ MAX_POOL_SIZE = 10
 #: unguessable enough that a future permalink feature is not born broken.
 GAME_ID_BYTES = 6
 
-#: `load_game`'s default freshness window (BUILD_PLAN.md, Step 5): a code
-#: nobody has touched in this long is one `RoomManager.get_or_load` should
-#: treat as gone rather than resurrect, the same cutoff `delete_stale_games`
-#: uses to remove the row entirely.
+#: `load_game`'s default freshness window: a code nobody has touched in this
+#: long is one `RoomManager.get_or_load` should treat as gone rather than
+#: resurrect, the same cutoff `delete_stale_games` uses to remove the row
+#: entirely.
 DEFAULT_LOAD_MAX_AGE = timedelta(hours=24)
 
 
@@ -101,8 +101,8 @@ class Database:
     def from_env(cls) -> Self:
         """Build a database from `DATABASE_URL` and nothing else.
 
-        The connection string has exactly one source (BUILD_PLAN.md, Step 3's
-        review checklist). There is deliberately no default: a fallback to a
+        The connection string has exactly one source. There is deliberately
+        no default: a fallback to a
         localhost URL would let production start up pointed at nothing and only
         fail once somebody tried to play.
 
@@ -166,8 +166,8 @@ class Database:
         """Record a new game and return its id.
 
         Called when the room is created, not when it starts: one room hosts
-        exactly one game, and "play again" makes a new room (BUILD_PLAN.md,
-        section 3). The creator is the only player and holds seat 0, so
+        exactly one game, and "play again" makes a new room. The creator is
+        the only player and holds seat 0, so
         `host_idx` and `player_count` have exactly one possible value here;
         `save_snapshot` keeps them true from then on.
 
@@ -204,7 +204,7 @@ class Database:
         `max_age` mirrors `delete_stale_games`'s cutoff: a code nobody has
         touched in that long is treated as gone even if the row has not been
         swept yet, so `RoomManager.get_or_load` never resurrects an abandoned
-        game (BUILD_PLAN.md, Step 5).
+        game.
         """
         async with self._pool.connection() as conn:
             cursor = await conn.execute(
@@ -298,9 +298,9 @@ class Database:
         pages written against a game still marked in progress would be loaded
         back into memory and played on.
 
-        Clearing the snapshot is what removes the player tokens (BUILD_PLAN.md,
-        section 1), and the version bump invalidates any snapshot write still
-        in flight from another instance.
+        Clearing the snapshot is what removes the player tokens, and the
+        version bump invalidates any snapshot write still in flight from
+        another instance.
 
         Not idempotent: a second call collides on the primary keys and rolls
         back. That is the intended noise -- a game finishes once.
@@ -399,7 +399,7 @@ class Database:
         A game nobody has touched in a day is one nobody is coming back to:
         the players have closed their tabs and the room is holding a four
         letter code hostage. Finished games are never deleted -- they are the
-        whole reason the rows are written (BUILD_PLAN.md, Step 5).
+        whole reason the rows are written.
 
         The cutoff is computed by Postgres from `now()` rather than by Python,
         so there is one clock involved instead of two, and a test can age a row
