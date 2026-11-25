@@ -31,6 +31,14 @@ Run tests, lint, builds and installs yourself only when you actually need to ver
 
 ## Use the library's documented pattern
 When a library or framework has a standard, documented way to do something (e.g. FastAPI's cached-settings-plus-`Depends` pattern), use that instead of inventing a bespoke one. If no documented pattern fits, say so and propose an alternative rather than silently making one up.
+## Run checks yourself
+Run lint, tests and builds yourself using the make targets and fix any failures yourself without asking me. Never guess or predict what errors might occur; run the check and read the real output. While iterating run the narrowest check with quiet output (for example `-q -x --tb=short`, `| tail -n 30`). Run the full `make lint` and `make test` once before opening the PR. Do not run terraform, gcloud, firebase or any cloud or deploy command; give me the exact command instead and I'll run it and paste the result.
+
+## No code in the terminal
+Never paste file contents, diffs or code blocks into a chat response. The user reviews every change in GitHub (comparing branches/PRs), not in the terminal, and will not read code shown there. Terminal responses are prose only: what changed, why, which files, and the PR/commit link. This doesn't change what you do with Read/Edit/Write/git — only what you print back to the user.
+
+## Keep `.claude/progress.json` live, not just at the end
+See the `progress-statusline-and-pr-alert` memory for the full contract. The short version: rewrite `step`, `percent` and `note` as the work actually moves, not only once at the start and once at the end of a step — a stale 100%/`ready` left over from the previous step looks identical to real work being stuck. At the start of a new step, reset it immediately (low `percent`, `state: "working"`) before doing anything else.
 
 ## End of every step
 Update `docs/PROGRESS.md`: tick the step and add at most 5 lines under "What exists".
