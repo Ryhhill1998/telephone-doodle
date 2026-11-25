@@ -1,8 +1,8 @@
 """Structured logging: one JSON object per line, to stdout.
 
 Cloud Run ships stdout to Cloud Logging for free, so this is the whole
-observability story for v0 (BUILD_PLAN.md, Step 4). Event names are fixed so a
-later dashboard can filter on them; `rate_limited` and `snapshot_conflict` are
+observability story for v0. Event names are fixed so a later dashboard can
+filter on them; `rate_limited` and `snapshot_conflict` are
 listed even though nothing raises them until Steps 5 and 6, so those steps add
 a call site rather than inventing a new convention.
 

@@ -3,8 +3,8 @@
 
 `game_engine.submit` stores whatever `strokes` dict it is given -- it has no
 idea what a valid drawing looks like, because that is an API-shaped concern,
-not a rule of the game (BUILD_PLAN.md, section 3's stroke limits). Everything
-else here (names, guesses, player counts) is already checked by `game_engine`,
+not a rule of the game. Everything else here (names, guesses, player counts)
+is already checked by `game_engine`,
 so it is not re-checked here: a limit written down twice is a limit that can
 disagree with itself.
 """
@@ -38,7 +38,7 @@ __all__ = [
     "SubmitPageMessage",
 ]
 
-# -- the stroke payload (BUILD_PLAN.md, section 3) -------------------------
+# -- the stroke payload -----------------------------------------------------
 
 MAX_OPERATIONS = 500
 MAX_POINTS = 20_000

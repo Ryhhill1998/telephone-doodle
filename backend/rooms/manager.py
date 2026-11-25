@@ -2,14 +2,14 @@
 
 One `Room` per game in progress, keyed by its code. `rooms` owns the engine
 state, the open WebSocket per player (keyed by token, because seat `idx`
-reshuffles in the lobby -- BUILD_PLAN.md, Step 4), and broadcasting a fresh
-personalised `state` to everyone after every change.
+reshuffles in the lobby), and broadcasting a fresh personalised `state` to
+everyone after every change.
 
 A snapshot is written after every state-changing event, guarded by the row's
 version, and a room missing from memory is loaded back from that snapshot on
 demand (`get_or_load`) -- a deploy, a restart or Cloud Run scaling to zero
-costs a few seconds of reconnecting, not the game (BUILD_PLAN.md, Step 5).
-Losing the version guard means another instance holds this room now: this
+costs a few seconds of reconnecting, not the game. Losing the version guard
+means another instance holds this room now: this
 instance drops its copy and closes its sockets with 1012, and the client
 reconnects into a fresh load.
 
@@ -52,8 +52,7 @@ CLEANUP_INTERVAL = timedelta(minutes=30)
 
 #: How long a game may go untouched before `get_or_load` refuses to load it
 #: and the hourly sweep deletes its row outright -- the same cutoff, so a code
-#: is never "not quite stale enough to load but not stale enough to delete"
-#: (BUILD_PLAN.md, Step 5).
+#: is never "not quite stale enough to load but not stale enough to delete".
 GAME_STALE_AFTER = timedelta(hours=24)
 DB_CLEANUP_INTERVAL = timedelta(hours=1)
 
@@ -67,8 +66,7 @@ class Room:
     """One game, live in memory.
 
     `version` mirrors the `games.version` column at the point this copy was
-    last written or loaded; every snapshot write is conditioned on it matching
-    (BUILD_PLAN.md, Step 5).
+    last written or loaded; every snapshot write is conditioned on it matching.
     """
 
     game: Game
@@ -99,8 +97,8 @@ class RoomManager:
         self._db_cleanup_task: asyncio.Task[None] | None = None
         #: One lock per in-flight load, so two requests racing to reconnect a
         #: room that just fell out of memory load it exactly once instead of
-        #: each building its own copy (BUILD_PLAN.md, Step 5). Never cleaned
-        #: up afterwards -- a lock is a few bytes, and the number of distinct
+        #: each building its own copy. Never cleaned up afterwards -- a lock
+        #: is a few bytes, and the number of distinct
         #: codes a single instance ever sees in its lifetime is small.
         self._load_locks: dict[str, asyncio.Lock] = {}
 
@@ -129,7 +127,7 @@ class RoomManager:
         Separate from `_cleanup_loop`: that one frees this instance's memory
         of rooms nobody is connected to any more; this one is the thing that
         stops an abandoned game's row -- and its four-letter code -- living
-        forever (BUILD_PLAN.md, Step 5).
+        forever.
         """
         while True:
             deleted = await self._db.delete_stale_games(self._stale_after)
@@ -162,7 +160,7 @@ class RoomManager:
         write already happens synchronously as part of handling the event
         that caused it, so there is nothing left to flush here -- only the
         sockets, so clients start reconnecting immediately instead of waiting
-        out a dead connection (BUILD_PLAN.md, Step 5).
+        out a dead connection.
         """
         for code in list(self._rooms):
             room = self._rooms.pop(code)
@@ -207,7 +205,7 @@ class RoomManager:
 
     async def get_or_load(self, code: str) -> Room:
         """The room for this code: from memory if it's live, from Postgres if
-        not (BUILD_PLAN.md, Step 5).
+        not.
 
         Every player starts disconnected -- there is no socket to any of them
         yet in this instance -- and reconnects set their own flag back to true
@@ -356,8 +354,7 @@ class RoomManager:
 
     async def _persist_and_broadcast(self, room: Room) -> None:
         """Write the snapshot, then broadcast -- every mutation but a connect,
-        a disconnect or the final `finish_reveal` goes through here
-        (BUILD_PLAN.md, Step 5).
+        a disconnect or the final `finish_reveal` goes through here.
 
         A lost version race means another instance has already written this
         game, so this instance's copy is wrong the moment it loses: the room

@@ -1,10 +1,9 @@
 """Environment-based configuration.
 
-One place for the handful of values that differ between dev and production
-(BUILD_PLAN.md, section 2's repo layout). `pydantic-settings` reads everything
-from the environment; there is no default list of origins, because a wrong
-guess there would either lock out the real frontend or open the API to every
-site on the internet.
+One place for the handful of values that differ between dev and production.
+`pydantic-settings` reads everything from the environment; there is no default
+list of origins, because a wrong guess there would either lock out the real
+frontend or open the API to every site on the internet.
 """
 
 from __future__ import annotations

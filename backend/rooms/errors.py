@@ -21,10 +21,10 @@ class RoomNotFound(RoomError):
 class RoomGone(RoomError):
     """This instance's copy of the room was just dropped mid-request.
 
-    Raised when a version-guarded snapshot write loses to another instance
-    (BUILD_PLAN.md, Step 5): the room is already gone from memory and every
-    one of its sockets is already closed with 1012 by the time this reaches
-    the caller, so there is nothing left to retry against on this instance.
+    Raised when a version-guarded snapshot write loses to another instance:
+    the room is already gone from memory and every one of its sockets is
+    already closed with 1012 by the time this reaches the caller, so there
+    is nothing left to retry against on this instance.
     """
 
 

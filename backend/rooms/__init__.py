@@ -1,7 +1,7 @@
 """Live rooms: the engine's in-memory half, and the only thing `api` talks to.
 
-`rooms` sits between `api` and the two packages below it (BUILD_PLAN.md,
-section 2): it calls `game_engine` for the rules and `storage` for the two
+`rooms` sits between `api` and the two packages below it: it calls
+`game_engine` for the rules and `storage` for the two
 writes a room makes (created, finished), and translates between the engine's
 models and the plain rows `storage` deals in. `api` never touches
 `game_engine` or `storage` directly.

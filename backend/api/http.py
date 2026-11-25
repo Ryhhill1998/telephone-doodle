@@ -1,7 +1,7 @@
 """HTTP routes: create and join a room.
 
-Thin on purpose (BUILD_PLAN.md, Step 4): every rule lives in `game_engine`,
-every room lives in `rooms`. This module only translates between HTTP and
+Thin on purpose: every rule lives in `game_engine`, every room lives in
+`rooms`. This module only translates between HTTP and
 `RoomManager`.
 """
 

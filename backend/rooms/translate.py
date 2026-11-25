@@ -1,8 +1,8 @@
 """Translate a finished `Game` into the plain rows `storage` writes.
 
-`storage` and `game_engine` are siblings that may not import each other
-(BUILD_PLAN.md, section 2), so `rooms` sits between them and does this by
-hand. Listing the columns explicitly is what stops a field that must not
+`storage` and `game_engine` are siblings that may not import each other, so
+`rooms` sits between them and does this by hand. Listing the columns
+explicitly is what stops a field that must not
 survive a finished game -- a token, the undealt word pool, the reveal
 pointer -- from drifting into the database by accident.
 """

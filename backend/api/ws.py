@@ -1,8 +1,8 @@
 """The WebSocket API: one connection per player, one route per room.
 
 Parsing, auth and the per-frame size cap live here; every action is a call
-into `rooms.RoomManager` (BUILD_PLAN.md, Step 4). A rejected message (wrong
-phase, wrong sender, bad payload) gets an `error` reply and the connection
+into `rooms.RoomManager`. A rejected message (wrong phase, wrong sender, bad
+payload) gets an `error` reply and the connection
 stays open -- only a bad `Origin`, an unknown room or an invalid token close
 the socket, because those mean there is no legitimate conversation to have.
 """
@@ -49,7 +49,7 @@ def _origin_allowed(settings: Settings, origin: str | None) -> bool:
 
     CORS protects browsers reading HTTP responses and is handled by
     `CORSMiddleware`; WebSocket upgrades are not covered by CORS at all, so
-    the server has to check this itself (BUILD_PLAN.md, section 3).
+    the server has to check this itself.
     """
     if settings.allowed_origins is None:
         return True
