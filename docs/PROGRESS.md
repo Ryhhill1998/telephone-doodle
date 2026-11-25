@@ -8,8 +8,8 @@ Update at the end of every step: tick it and add at most 5 lines under "What exi
 - [x] 2 Game engine (2a word bank, 2b engine)
 - [x] 3 Storage layer
 - [x] 4 Rooms and realtime API
-- [ ] 5 Durable games  <- NEXT
-- [ ] 6 Rate limits and abuse protection
+- [x] 5 Durable games
+- [ ] 6 Rate limits and abuse protection  <- NEXT
 - [ ] 7 Design review gate
 - [ ] 8 Frontend foundation and lobby
 - [ ] 9 Drawing canvas component
@@ -31,6 +31,7 @@ Update at the end of every step: tick it and add at most 5 lines under "What exi
 - `rooms/` (Step 4 PR): `RoomManager` with 4-letter room codes, join/token mapping, connection registry, per-player `state` broadcast after every change, 6h inactive-room cleanup; structured JSON event logging in `rooms/events.py`.
 - `api/` (Step 4 PR): HTTP routes (`api/http.py`) and the WebSocket route (`api/ws.py`), Pydantic message schemas in `api/schemas.py`. Routes are thin and call into `rooms`.
 - `settings.py`: `Settings` (pydantic-settings, `ALLOWED_ORIGINS`) with a cached `get_settings()` function injected via FastAPI's `Depends`; CORS and the WebSocket `Origin` check both read `allowed_origins`.
+- `rooms/` (Step 5 PR): every lobby/round/reveal action now persists through version-guarded `save_snapshot`; `RoomManager.get_or_load` rebuilds a room from Postgres when it's not in memory (per-code lock, 24h freshness); a lost version race raises `RoomGone`, drops the room and closes its sockets with 1012; an hourly + at-startup sweep deletes abandoned games; `main.py`'s lifespan shutdown closes every socket with 1012 on SIGTERM.
 
 ## Open proposals (agreed in principle, not yet applied to the step files)
 - Step 6: raise the per-IP concurrent WebSocket cap from 20 to 40.
