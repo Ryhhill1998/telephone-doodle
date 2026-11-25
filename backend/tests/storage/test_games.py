@@ -99,7 +99,7 @@ async def test_load_game_does_not_resurrect_a_stale_row(
     db: Database, conn: psycopg.AsyncConnection
 ) -> None:
     """A code nobody has touched in `max_age` is gone to `get_or_load`, not just
-    to the cleanup sweep that eventually deletes its row (BUILD_PLAN.md, Step 5).
+    to the cleanup sweep that eventually deletes its row.
     """
     game_id = await db.create_game("KQFM")
     await conn.execute(

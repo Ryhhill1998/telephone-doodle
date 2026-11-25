@@ -1,6 +1,6 @@
-"""The stroke payload: the structure and size limits BUILD_PLAN.md (section 3)
-asks `api` to enforce, since `game_engine.submit` stores whatever dict it is
-given and checks none of this itself.
+"""The stroke payload: the structure and size limits `api` is asked to
+enforce, since `game_engine.submit` stores whatever dict it is given and
+checks none of this itself.
 """
 
 from __future__ import annotations

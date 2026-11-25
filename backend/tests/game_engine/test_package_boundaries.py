@@ -1,8 +1,8 @@
 """Guards what `game_engine` is allowed to depend on.
 
-The *layering* between packages (`api` -> `rooms` -> `game_engine`, BUILD_PLAN.md
-section 2) is enforced by import-linter, configured in `pyproject.toml` and run
-by `make backend-lint`. It reads the real import graph, so it also catches
+The *layering* between packages (`api` -> `rooms` -> `game_engine`) is
+enforced by import-linter, configured in `pyproject.toml` and run by
+`make backend-lint`. It reads the real import graph, so it also catches
 indirect chains, which a per-file check cannot.
 
 What is left here is the part no import linter can express:

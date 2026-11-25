@@ -1,8 +1,8 @@
 """RoomManager: lobby actions, connections keyed by token, and cleanup.
 
 `create_room` and `finish_reveal` are the only two places `RoomManager` talks
-to Postgres (BUILD_PLAN.md, Step 4 -- snapshotting every change is Step 5), so
-these tests run against the real database like the storage tests do.
+to Postgres (snapshotting every change is Step 5), so these tests run against
+the real database like the storage tests do.
 """
 
 from __future__ import annotations
@@ -147,7 +147,7 @@ async def test_evict_stale_rooms_leaves_active_rooms_alone(db: Database) -> None
     assert manager.get_room(room.game.code) is room
 
 
-# -- durability (BUILD_PLAN.md, Step 5) -----------------------------------
+# -- durability (Step 5) ---------------------------------------------------
 
 
 async def _play_round(manager: RoomManager, room: Room, players: list[Player]) -> None:
@@ -208,7 +208,7 @@ async def test_room_survives_discarding_the_manager_and_reloads_on_reconnect(
 
 async def test_room_survives_discarding_the_manager_during_the_reveal(db: Database) -> None:
     """The shared reveal pointer is part of the snapshot, so it picks up where
-    it was left, not back at the first book (BUILD_PLAN.md, Step 5).
+    it was left, not back at the first book.
     """
     manager = RoomManager(db)
     room, host, host_token = await manager.create_room("Jo")
