@@ -22,5 +22,8 @@ Do not run tests, lint, builds, installs, Docker, Terraform or any cloud command
 - No subagents, web searches or `/claude-api` unless the step says so or the user asks.
 - If context passes about 100k tokens, say so.
 
+## Use the library's documented pattern
+When a library or framework has a standard, documented way to do something (e.g. FastAPI's cached-settings-plus-`Depends` pattern), use that instead of inventing a bespoke one. If no documented pattern fits, say so and propose an alternative rather than silently making one up.
+
 ## End of every step
 Update `docs/PROGRESS.md`: tick the step and add at most 5 lines under "What exists".
