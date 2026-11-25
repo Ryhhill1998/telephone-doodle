@@ -1,5 +1,5 @@
 # Every lint, test, build and check lives here, and CI calls these same targets,
-# so no command's flags are ever duplicated in a workflow file (BUILD_PLAN.md, §0 rule 11).
+# so no command's flags are ever duplicated in a workflow file.
 #
 # Run `make` or `make help` for the list.
 

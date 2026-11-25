@@ -1,7 +1,7 @@
 """HTTP routes: create and join a room.
 
-Thin on purpose (BUILD_PLAN.md, Step 4): every rule lives in `game_engine`,
-every room lives in `rooms`. This module only translates between HTTP and
+Thin on purpose: every rule lives in `game_engine`, every room lives in
+`rooms`. This module only translates between HTTP and
 `RoomManager`.
 """
 
@@ -15,7 +15,7 @@ from api.schemas import (
     JoinRoomRequest,
     JoinRoomResponse,
 )
-from rooms import NotAllowed, RoomManager, RoomNotFound, WrongPhase
+from rooms import NotAllowed, RoomGone, RoomManager, RoomNotFound, WrongPhase
 
 router = APIRouter()
 
@@ -37,7 +37,7 @@ async def create_room(body: CreateRoomRequest, request: Request) -> CreateRoomRe
 async def join_room(code: str, body: JoinRoomRequest, request: Request) -> JoinRoomResponse:
     try:
         _, player, token = await _rooms(request).join_room(code.upper(), body.name)
-    except RoomNotFound as exc:
+    except (RoomNotFound, RoomGone) as exc:
         raise HTTPException(status_code=404, detail="no such room") from exc
     except WrongPhase as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

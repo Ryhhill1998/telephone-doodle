@@ -2,7 +2,7 @@
 
 Step 5 writes this to `games.snapshot` after every state-changing event and
 loads it back when a room is needed again, so a deploy, a restart or Cloud Run
-scaling to zero does not end a game (BUILD_PLAN.md, section 3).
+scaling to zero does not end a game.
 
 Lossless means *everything*, tokens included: a reconnecting player proves who
 they are with a token that must survive the round trip. The snapshot is cleared

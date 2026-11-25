@@ -1,8 +1,8 @@
 """Room codes: four letters, none of them ambiguous.
 
 `O`/`0` and `I`/`1` are excluded so a code read aloud or copied by hand never
-has to be second-guessed (BUILD_PLAN.md, Step 4). Uniqueness among games still
-being played is enforced by Postgres's partial unique index
+has to be second-guessed. Uniqueness among games still being played is
+enforced by Postgres's partial unique index
 (`storage.ACTIVE_CODE_INDEX`); this module only produces candidates.
 """
 

@@ -1,4 +1,4 @@
-# BUILD_PLAN.md: Telephone Doodle (v0), revision 5
+# Working agreement: Telephone Doodle (v0), revision 5
 
 A web app for playing "telephone pictionary" with family. Each player starts a "book" by picking a word and drawing it. Books are then passed around and players alternate between writing a guess for the previous drawing and drawing the previous guess. At the end, every book is revealed page by page.
 

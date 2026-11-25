@@ -14,8 +14,9 @@ is revealed page by page — usually to considerable confusion.
 **In development — nothing is deployed yet.**
 
 The full specification, the locked technical decisions and the step-by-step build
-plan all live in [`BUILD_PLAN.md`](./BUILD_PLAN.md). That file is the source of
-truth; this README will be rewritten properly in the final step.
+plan all live in [`docs/plan/`](./docs/plan/) and [`docs/steps/`](./docs/steps/).
+Those are the source of truth; this README will be rewritten properly in the
+final step.
 
 ## Planned stack
 
@@ -59,6 +60,11 @@ they check — a partial unique index, a version-guarded write, a transaction th
 has to be all or nothing — is decided by the database. `DATABASE_URL` points at
 the container above by default; in production it comes from Secret Manager, and
 there is no fallback if it is unset.
+
+A game's state is written to Postgres after every change, so a deploy, a
+restart or Cloud Run scaling to zero costs players a few seconds of
+reconnecting, not the game in progress. A finished game's snapshot — and the
+player tokens in it — is deleted as soon as the game ends.
 
 ## Contributing
 

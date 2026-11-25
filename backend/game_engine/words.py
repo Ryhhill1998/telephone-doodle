@@ -1,9 +1,9 @@
 """The word bank: dealing round-0 word options without ever repeating one.
 
 All players' options are drawn from **one** shuffled bank without replacement,
-so no two players are ever dealt the same word (BUILD_PLAN.md, section 1). A
-shuffle returns the player's current options and draws fresh ones from the words
-nobody holds and nobody has picked.
+so no two players are ever dealt the same word. A shuffle returns the player's
+current options and draws fresh ones from the words nobody holds and nobody
+has picked.
 
 Purity: `WordBank` takes its vocabulary as an argument and its randomness as an
 injected `random.Random`, so it is deterministic under test. `load_words()` is
@@ -20,7 +20,7 @@ from importlib.resources import files
 
 __all__ = ["DEFAULT_OPTION_COUNT", "WordBank", "WordBankExhausted", "load_words"]
 
-# Keys used in the snapshot written to games.snapshot (BUILD_PLAN.md, section 3).
+# Keys used in the snapshot written to games.snapshot.
 _POOL, _HELD, _DISCARDED, _RETIRED = "pool", "held", "discarded", "retired"
 
 DEFAULT_OPTION_COUNT = 3
@@ -91,9 +91,8 @@ class WordBank:
 
         A *dealt* word is retired so nobody else can be given it. A word the
         player typed themselves is deliberately not retired and not compared
-        with anyone else's: any such check would leak what another player chose
-        (BUILD_PLAN.md, section 1). Typed words may therefore collide, which the
-        plan accepts.
+        with anyone else's: any such check would leak what another player
+        chose. Typed words may therefore collide, which the plan accepts.
         """
         held = self._held.pop(seat, ())
         if word in held:
@@ -108,8 +107,8 @@ class WordBank:
         """A JSON-safe snapshot of the whole bank.
 
         The held options are included so that a player who reconnects mid
-        round 0 is shown the *same* three words, rather than a fresh deal that
-        might collide with another player's (BUILD_PLAN.md, Step 5).
+        round 0 is shown the *same* three words, rather than a fresh deal
+        that might collide with another player's.
 
         `held` is a list of pairs, not a mapping: JSON object keys must be
         strings, and round-tripping seat numbers through strings is a bug

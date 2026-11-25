@@ -1,8 +1,8 @@
 """The WebSocket API: one connection per player, one route per room.
 
 Parsing, auth and the per-frame size cap live here; every action is a call
-into `rooms.RoomManager` (BUILD_PLAN.md, Step 4). A rejected message (wrong
-phase, wrong sender, bad payload) gets an `error` reply and the connection
+into `rooms.RoomManager`. A rejected message (wrong phase, wrong sender, bad
+payload) gets an `error` reply and the connection
 stays open -- only a bad `Origin`, an unknown room or an invalid token close
 the socket, because those mean there is no legitimate conversation to have.
 """
@@ -28,7 +28,7 @@ from api.schemas import (
     StartMessage,
     SubmitPageMessage,
 )
-from rooms import GameError, InvalidToken, Player, Room, RoomManager, RoomNotFound
+from rooms import GameError, InvalidToken, Player, Room, RoomGone, RoomManager, RoomNotFound
 from rooms.events import log_event
 from settings import Settings, get_settings
 
@@ -49,7 +49,7 @@ def _origin_allowed(settings: Settings, origin: str | None) -> bool:
 
     CORS protects browsers reading HTTP responses and is handled by
     `CORSMiddleware`; WebSocket upgrades are not covered by CORS at all, so
-    the server has to check this itself (BUILD_PLAN.md, section 3).
+    the server has to check this itself.
     """
     if settings.allowed_origins is None:
         return True
@@ -69,7 +69,7 @@ async def room_socket(
 
     rooms: RoomManager = websocket.app.state.rooms
     try:
-        room, player = rooms.authenticate(code.upper(), token)
+        room, player = await rooms.authenticate(code.upper(), token)
     except RoomNotFound:
         await websocket.close(code=CLOSE_ROOM_NOT_FOUND)
         return
@@ -98,6 +98,11 @@ async def room_socket(
                 await _dispatch(rooms, room, player, message)
             except GameError as exc:
                 await _send_error(websocket, str(exc))
+            except RoomGone:
+                # Another instance won the version race; this instance has
+                # already dropped the room and closed every socket in it,
+                # this one included, so there is nothing left to receive.
+                break
     except WebSocketDisconnect as exc:
         await rooms.disconnect(room, player)
         log_event("ws_closed", code=room.game.code, seat=player.idx, close_code=exc.code)

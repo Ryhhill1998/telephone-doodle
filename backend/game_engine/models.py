@@ -35,7 +35,7 @@ MAX_TEXT_LENGTH = 100
 
 
 class Phase(StrEnum):
-    """LOBBY -> ROUND(r) -> REVEAL -> DONE (BUILD_PLAN.md, section 3)."""
+    """LOBBY -> ROUND(r) -> REVEAL -> DONE."""
 
     LOBBY = "lobby"
     ROUND = "round"
@@ -92,8 +92,7 @@ class Reveal:
     """The shared pointer every player's screen follows.
 
     Step 0 of a book is its word card; steps 1..N are its pages. Only the host
-    moves it, and the server broadcasts the result, so no client can drift
-    (BUILD_PLAN.md, section 3, "Reveal sync").
+    moves it, and the server broadcasts the result, so no client can drift.
     """
 
     book: int = 0

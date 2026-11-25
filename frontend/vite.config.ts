@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config'
 
 // The API runs separately (Cloud Run in production, uvicorn locally). In dev
 // VITE_API_URL is empty, so the app makes same-origin requests to /api and /ws
-// and this proxy forwards them to the local backend. See BUILD_PLAN.md §3.
+// and this proxy forwards them to the local backend.
 const BACKEND = 'http://127.0.0.1:8000'
 
 export default defineConfig({

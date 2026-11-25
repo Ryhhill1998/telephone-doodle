@@ -37,7 +37,7 @@ select = [
     "RUF", # ruff-specific
 ]
 
-# Package layering (BUILD_PLAN.md section 2): api calls rooms; rooms calls
+# Package layering: api calls rooms; rooms calls
 # game_engine and storage; game_engine calls nobody. import-linter checks the
 # real import graph, so it catches indirect chains (api -> rooms -> api) that a
 # per-file check cannot.

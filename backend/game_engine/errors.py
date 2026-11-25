@@ -1,8 +1,7 @@
 """Errors raised when a message is not valid for the current game state.
 
 The API layer turns these into rejections. They are deliberately specific, so a
-rejection says *why* rather than just "no" (BUILD_PLAN.md, section 3: "reject
-messages not valid for the current phase or sender").
+rejection says *why* rather than just "no".
 """
 
 __all__ = ["GameError", "InvalidSubmission", "NotAllowed", "WrongPhase"]

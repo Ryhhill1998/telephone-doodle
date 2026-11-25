@@ -1,5 +1,6 @@
 """Creating a game, loading it back, and the version-guarded snapshot write."""
 
+from datetime import timedelta
 from typing import Any
 
 import psycopg
@@ -92,6 +93,21 @@ async def test_load_game_returns_the_latest_snapshot(db: Database) -> None:
     loaded = await db.load_game("KQFM")
 
     assert loaded == ActiveGame(id=game_id, version=1, snapshot=SNAPSHOT)
+
+
+async def test_load_game_does_not_resurrect_a_stale_row(
+    db: Database, conn: psycopg.AsyncConnection
+) -> None:
+    """A code nobody has touched in `max_age` is gone to `get_or_load`, not just
+    to the cleanup sweep that eventually deletes its row.
+    """
+    game_id = await db.create_game("KQFM")
+    await conn.execute(
+        "UPDATE games SET updated_at = now() - %s WHERE id = %s",
+        (timedelta(hours=25), game_id),
+    )
+
+    assert await db.load_game("KQFM", max_age=timedelta(hours=24)) is None
 
 
 # -- save_snapshot --------------------------------------------------------

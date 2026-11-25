@@ -1,7 +1,6 @@
 """The thin FastAPI layer: HTTP routes, the WebSocket handler, and the request,
-response and message schemas, validated with Pydantic (BUILD_PLAN.md, section
-2). Everything here calls into `rooms`; nothing here touches `game_engine` or
-`storage` directly.
+response and message schemas, validated with Pydantic. Everything here calls
+into `rooms`; nothing here touches `game_engine` or `storage` directly.
 """
 
 from fastapi import APIRouter

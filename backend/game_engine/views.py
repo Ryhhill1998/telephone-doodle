@@ -1,10 +1,10 @@
 """The personalised snapshot each player receives.
 
 The server sends a full `state` after every change rather than diffs, tailored
-to the player it is going to (BUILD_PLAN.md, section 3). The tailoring is the
-security boundary: before the reveal a player must never receive another
-player's word or pages, so the rule is enforced by only ever *putting in* what
-they may see, rather than by filtering a complete state afterwards.
+to the player it is going to. The tailoring is the security boundary: before
+the reveal a player must never receive another player's word or pages, so the
+rule is enforced by only ever *putting in* what they may see, rather than by
+filtering a complete state afterwards.
 
 Nothing here ever emits a token.
 """
